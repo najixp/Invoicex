@@ -720,7 +720,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
 
                                             Item item = new Item();
                                             item.Id = obj.optInt("id");
-                                            item.Quantity = obj.optInt("quantity");
+                                            item.Quantity = obj.optDouble("quantity");
                                             item.Name = helper_string.optString(obj, "name");
                                             item.Rate = obj.optDouble("rate");
                                             item.Description = helper_string.optString(obj,
@@ -908,7 +908,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
             ImageView image_remove_item = (ImageView) rowView.findViewById(R.id.image_remove_item);
             image_remove_item.setTag(position);
 
-            text_name.setText(item.Name);
+            text_name.setText(item.Name + "  -  " + item.Description);
             text_rate.setText(currency + String.format("%.2f", item.Quantity * item.Rate));
             text_quantity.setText(item.Quantity + " x " + String.format("%.2f", item.Rate));
 
@@ -938,8 +938,8 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
     private Integer line_item_start = 400;
     private Integer line_item_height = 28;
 
-    private BaseColor color_light_grey = new BaseColor(227, 227, 227);
-    private BaseColor color_invoice_header_background = new BaseColor(244, 67, 54);
+    private BaseColor color_light_grey = new BaseColor(0, 0, 0);
+    private BaseColor color_invoice_header_background = new BaseColor(255, 255, 255);
 
     private String createPDF(String pdfFilename) {
 
@@ -1063,20 +1063,25 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         try {
             Rectangle rec = new Rectangle(30, line_heading_start + 15, 580, line_heading_start - 8);
             rec.setBackgroundColor(color_invoice_header_background);
+            rec.setBorder(Rectangle.BOX);
+            rec.setBorderWidth(3);
+            rec.setBorderColor(color_light_grey);
+
+
             cb.rectangle(rec);
 
             // Invoice Detail box Text Headings
             createText(cb, 40, line_heading_start, "#", SIZE_TEXT_HEADER_TABLE, bf, BaseColor
-                    .WHITE, Element.ALIGN_LEFT);
+                    .BLACK, Element.ALIGN_LEFT);
             createText(cb, 70, line_heading_start, getResources().getString(R.string.item),
-                    SIZE_TEXT_HEADER_TABLE, bf, BaseColor.WHITE, Element.ALIGN_LEFT);
-            createText(cb, 90, line_heading_start, getResources().getString(R.string.description), SIZE_TEXT_HEADER_TABLE, bf, BaseColor.WHITE, Element.ALIGN_LEFT);
-            createText(cb, 400, line_heading_start, getResources().getString(R.string.rate),
-                    SIZE_TEXT_HEADER_TABLE, bf, BaseColor.WHITE, Element.ALIGN_RIGHT);
+                    SIZE_TEXT_HEADER_TABLE, bf, BaseColor.BLACK, Element.ALIGN_LEFT);
+            createText(cb, 150, line_heading_start, getResources().getString(R.string.description), SIZE_TEXT_HEADER_TABLE, bf, BaseColor.BLACK, Element.ALIGN_LEFT);
+            createText(cb, 350, line_heading_start, getResources().getString(R.string.rate),
+                    SIZE_TEXT_HEADER_TABLE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             createText(cb, 460, line_heading_start, getResources().getString(R.string.quantity),
-                    SIZE_TEXT_HEADER_TABLE, bf, BaseColor.WHITE, Element.ALIGN_RIGHT);
+                    SIZE_TEXT_HEADER_TABLE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             createText(cb, 568, line_heading_start, getResources().getString(R.string.amount),
-                    SIZE_TEXT_HEADER_TABLE, bf, BaseColor.WHITE, Element.ALIGN_RIGHT);
+                    SIZE_TEXT_HEADER_TABLE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -1196,9 +1201,9 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                     .BLACK, Element.ALIGN_LEFT);
             createText(cb, 70, y, item.Name, SIZE_TEXT_NORMAL, bf, BaseColor.BLACK, Element
                     .ALIGN_LEFT);
-            createText(cb, 90, y, item.Description, SIZE_TEXT_NORMAL, bf, BaseColor.BLACK, Element
+            createText(cb, 150, y, item.Description, SIZE_TEXT_NORMAL, bf, BaseColor.BLACK, Element
                     .ALIGN_LEFT);
-            createText(cb, 400, y, helper_number.round(item.Rate), SIZE_TEXT_NORMAL, bf,
+            createText(cb, 350, y, helper_number.round(item.Rate), SIZE_TEXT_NORMAL, bf,
                     BaseColor.BLACK, Element.ALIGN_RIGHT);
 
             createText(cb, 460, y, helper_number.round(item.Quantity), SIZE_TEXT_NORMAL, bf,

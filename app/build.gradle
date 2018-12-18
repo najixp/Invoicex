@@ -3,12 +3,13 @@ apply plugin: 'com.android.application'
 android {
     compileSdkVersion 23
     buildToolsVersion '28.0.3'
+
     defaultConfig {
         applicationId 'com.nemrano.invoicing'
         minSdkVersion 23
         targetSdkVersion 26
-        versionCode 5
-        versionName '1.5'
+        versionCode 10
+        versionName '1.10'
     }
     buildTypes {
         release {

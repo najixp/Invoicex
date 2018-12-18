@@ -309,6 +309,7 @@
                         android:textSize="18sp"
                         android:textStyle="bold"/>
                 </LinearLayout>
+
                 <android.support.design.widget.FloatingActionButton
                     android:id="@+id/printOut"
                     android:layout_width="match_parent"
@@ -319,7 +320,7 @@
                     android:layout_marginEnd="152dp"
                     android:clickable="true"
                     android:src="@drawable/printx"
-                    android:visibility="visible"
+                    android:visibility="gone"
                     app:srcCompat="@drawable/printx" />
             </LinearLayout>
         </LinearLayout>
