@@ -1,10 +1,8 @@
 package com.bytecodr.invoicing.main;
 
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.preference.Preference;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.Editable;
@@ -17,29 +15,20 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
 import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
 import com.android.volley.VolleyLog;
 import com.android.volley.toolbox.JsonObjectRequest;
+import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
-import com.bytecodr.invoicing.network.MySingleton;
 import com.bytecodr.invoicing.network.Network;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdView;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-
-import static com.bytecodr.invoicing.main.LoginActivity.SESSION_USER;
 
 public class SettingActivity extends AppCompatActivity implements View.OnClickListener {
     public static final String TAG = "SettingActivity";
@@ -159,9 +148,8 @@ public class SettingActivity extends AppCompatActivity implements View.OnClickLi
             String[] addressArray = address.split("\\|\\#", -1);
             String newStringValue = "";
 
-            for(int i = 0; i < addressArray.length ; i++)
-            {
-                String addressValue = addressArray[i].trim();
+            for (String anAddressArray : addressArray) {
+                String addressValue = anAddressArray.trim();
 
                 if (!addressValue.equals("")) newStringValue += addressValue + ", ";
             }
@@ -183,35 +171,30 @@ public class SettingActivity extends AppCompatActivity implements View.OnClickLi
                         .positiveText("OK")
                         .cancelable(false)
                         .negativeText("Cancel")
-                        .showListener(new DialogInterface.OnShowListener()
-                        {
-                            @Override
-                            public void onShow(DialogInterface dialog)
-                            {
-                                View view = setting_address_edit_dialog.getCustomView();
+                        .showListener(dialog -> {
+                            View view = setting_address_edit_dialog.getCustomView();
 
-                                setting_address1_edit = (EditText) view.findViewById(R.id.setting_address1_edit);
-                                setting_address2_edit = (EditText) view.findViewById(R.id.setting_address2_edit);
-                                setting_city_edit = (EditText) view.findViewById(R.id.setting_city_edit);
-                                setting_state_edit = (EditText) view.findViewById(R.id.setting_state_edit);
-                                setting_postcode_edit = (EditText) view.findViewById(R.id.setting_postcode_edit);
-                                setting_country_edit = (EditText) view.findViewById(R.id.setting_country_edit);
+                            setting_address1_edit = (EditText) view.findViewById(R.id.setting_address1_edit);
+                            setting_address2_edit = (EditText) view.findViewById(R.id.setting_address2_edit);
+                            setting_city_edit = (EditText) view.findViewById(R.id.setting_city_edit);
+                            setting_state_edit = (EditText) view.findViewById(R.id.setting_state_edit);
+                            setting_postcode_edit = (EditText) view.findViewById(R.id.setting_postcode_edit);
+                            setting_country_edit = (EditText) view.findViewById(R.id.setting_country_edit);
 
-                                String[] currentAddress = new String[0];
-                                try {
-                                    currentAddress = address.split("\\|\\#", -1);
-                                } catch (Exception e) {
-                                    e.printStackTrace();
-                                    return;
-                                }
-
-                                setting_address1_edit.setText(currentAddress[0]);
-                                setting_address2_edit.setText(currentAddress[1]);
-                                setting_city_edit.setText(currentAddress[2]);
-                                setting_state_edit.setText(currentAddress[3]);
-                                setting_postcode_edit.setText(currentAddress[4]);
-                                setting_country_edit.setText(currentAddress[5]);
+                            String[] currentAddress = new String[0];
+                            try {
+                                currentAddress = address.split("\\|\\#", -1);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                return;
                             }
+
+                            setting_address1_edit.setText(currentAddress[0]);
+                            setting_address2_edit.setText(currentAddress[1]);
+                            setting_city_edit.setText(currentAddress[2]);
+                            setting_state_edit.setText(currentAddress[3]);
+                            setting_postcode_edit.setText(currentAddress[4]);
+                            setting_country_edit.setText(currentAddress[5]);
                         })
                         .callback(new MaterialDialog.ButtonCallback()
                         {
@@ -250,36 +233,31 @@ public class SettingActivity extends AppCompatActivity implements View.OnClickLi
                         .positiveText("OK")
                         .cancelable(false)
                         .negativeText("Cancel")
-                        .showListener(new DialogInterface.OnShowListener()
-                        {
-                            @Override
-                            public void onShow(DialogInterface dialog)
-                            {
-                                View view = setting_currency_edit_dialog.getCustomView();
+                        .showListener(dialog -> {
+                            View view = setting_currency_edit_dialog.getCustomView();
 
-                                setting_currency_edit = (EditText) view.findViewById(R.id.setting_one_edit);
-                                setting_currency_edit.setText(currency);
+                            setting_currency_edit = (EditText) view.findViewById(R.id.setting_one_edit);
+                            setting_currency_edit.setText(currency);
 
-                                setting_currency_edit.addTextChangedListener(new TextWatcher() {
-                                    @Override
-                                    public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                            setting_currency_edit.addTextChangedListener(new TextWatcher() {
+                                @Override
+                                public void beforeTextChanged(CharSequence s, int start, int count, int after) {
 
-                                    }
+                                }
 
-                                    @Override
-                                    public void onTextChanged(CharSequence s, int start, int before, int count) {
+                                @Override
+                                public void onTextChanged(CharSequence s, int start, int before, int count) {
 
-                                    }
+                                }
 
-                                    @Override
-                                    public void afterTextChanged(Editable s) {
-                                        currency_format_example.setText(s.toString() + "100.00");
-                                    }
-                                });
+                                @Override
+                                public void afterTextChanged(Editable s) {
+                                    currency_format_example.setText(s.toString() + "100.00");
+                                }
+                            });
 
-                                currency_format_example = (TextView) view.findViewById(R.id.currency_format_example);
-                                currency_format_example.setText(currency + "100.00");
-                            }
+                            currency_format_example = (TextView) view.findViewById(R.id.currency_format_example);
+                            currency_format_example.setText(currency + "100.00");
                         })
                         .callback(new MaterialDialog.ButtonCallback()
                         {
@@ -317,15 +295,10 @@ public class SettingActivity extends AppCompatActivity implements View.OnClickLi
                         .positiveText("OK")
                         .cancelable(false)
                         .negativeText("Cancel")
-                        .showListener(new DialogInterface.OnShowListener()
-                        {
-                            @Override
-                            public void onShow(DialogInterface dialog)
-                            {
-                                View view = taxDialog.getCustomView();
-                                etTax = (EditText) view.findViewById(R.id.etTax);
-                                etTax.setText(String.valueOf(CommonUtilities.round(tax, 2)));
-                            }
+                        .showListener(dialog -> {
+                            View view = taxDialog.getCustomView();
+                            etTax = (EditText) view.findViewById(R.id.etTax);
+                            etTax.setText(String.valueOf(CommonUtilities.round(tax, 2)));
                         })
                         .callback(new MaterialDialog.ButtonCallback()
                         {
@@ -377,96 +350,66 @@ public class SettingActivity extends AppCompatActivity implements View.OnClickLi
         }
     }
 
-    @Override
-    protected void onStop() {
-        super.onStop();
-        MySingleton.getInstance(this).getRequestQueue().cancelAll(TAG);
-    }
-
     public void RunUpdateSettingsService() {
         progressDialog.show();
         VolleyLog.d("settings/update", api_parameter.toString());
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "settings/update", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
-                        try
-                        {
-                            JSONObject data = ((JSONObject) response.get("data"));
+                (Request.Method.POST, Network.API_URL + "settings/update", api_parameter, response -> {
+                    try {
+                        JSONObject data = ((JSONObject) response.get("data"));
 
-                            String setting_name =  data.getString("setting_name");
-                            String setting_value = data.getString("setting_value");
+                        String setting_name = data.getString("setting_name");
+                        String setting_value = data.getString("setting_value");
 
-                            SharedPreferences.Editor settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE).edit();
+                        SharedPreferences.Editor settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE).edit();
 
-                            if (setting_name.equals(KEY_ADDRESS)) {
-                                settings.putString(KEY_ADDRESS, setting_value);
-                                address = setting_value;
-                                settings_address_text.setText(getAddress());
-                            } else if (setting_name.equals(KEY_CURRENCY_SYMBOL)) {
-                                settings_currency_text.setText(setting_value);
-                                currency = setting_value;
-                                settings.putString(KEY_CURRENCY_SYMBOL, setting_value);
-                            } else if (setting_name.equals(KEY_VAT)) {
-                                tvTaxPreview.setText(setting_value);
-                                tax = Float.parseFloat(setting_value);
-                                settings.putFloat(KEY_VAT, tax);
-                            }
-
-                            settings.commit();
+                        if (setting_name.equals(KEY_ADDRESS)) {
+                            settings.putString(KEY_ADDRESS, setting_value);
+                            address = setting_value;
+                            settings_address_text.setText(getAddress());
+                        } else if (setting_name.equals(KEY_CURRENCY_SYMBOL)) {
+                            settings_currency_text.setText(setting_value);
+                            currency = setting_value;
+                            settings.putString(KEY_CURRENCY_SYMBOL, setting_value);
+                        } else if (setting_name.equals(KEY_VAT)) {
+                            tvTaxPreview.setText(setting_value);
+                            tax = Float.parseFloat(setting_value);
+                            settings.putFloat(KEY_VAT, tax);
                         }
-                        catch (JSONException ex) {}
 
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
+                        settings.commit();
+                    } catch (JSONException ex) {
                     }
-                }, new Response.ErrorListener()
-                {
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(SettingActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(SettingActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
+                }, error -> {
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(SettingActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(SettingActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(SettingActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(SettingActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(SettingActivity.this).getRequestQueue();
-
-        //Used to mark the request, so we can cancel it on our onStop method
-        postRequest.setTag(TAG);
-
-        MySingleton.getInstance(SettingActivity.this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 
 }

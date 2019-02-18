@@ -10,7 +10,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Handler;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.FileProvider;
@@ -24,7 +23,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -34,14 +32,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
 import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
 import com.android.volley.VolleyLog;
 import com.android.volley.toolbox.JsonObjectRequest;
+import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.BuildConfig;
 import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
@@ -51,10 +46,8 @@ import com.bytecodr.invoicing.model.Client;
 import com.bytecodr.invoicing.model.Estimate;
 import com.bytecodr.invoicing.model.Invoice;
 import com.bytecodr.invoicing.model.Item;
-import com.bytecodr.invoicing.network.MySingleton;
 import com.bytecodr.invoicing.network.Network;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
@@ -240,46 +233,31 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             toolbar.setTitle(getResources().getString(R.string.title_activity_new_purchase));
         }
 
-        array_list_clients = new ArrayList<Client>();
-        array_list_items = new ArrayList<Item>();
+        array_list_clients = new ArrayList<>();
+        array_list_items = new ArrayList<>();
 
         list_items = (ListView) findViewById(R.id.list_item);
         adapter_item = new EstimateItemAdapter(NewPurchaseActivity.this, array_list_items);
         list_items.setAdapter(adapter_item);
-        list_items.setOnItemClickListener(new AdapterView.OnItemClickListener()
-        {
-            @Override
-            public void onItemClick(AdapterView<?> arg0, View arg1, int position, long arg3) {
+        list_items.setOnItemClickListener((arg0, arg1, position, arg3) -> {
 
-               Item item  = array_list_items.get(position);
-               Intent intent = new Intent(NewPurchaseActivity.this, ItemPickerActivity.class);
-               intent.putExtra("data", item);
-               intent.putExtra("position", position);
-               startActivityForResult(intent, ITEM_PICKER_TAG);
-            }
-
+            Item item = array_list_items.get(position);
+            Intent intent = new Intent(NewPurchaseActivity.this, ItemPickerActivity.class);
+            intent.putExtra("data", item);
+            intent.putExtra("position", position);
+            startActivityForResult(intent, ITEM_PICKER_TAG);
         });
 
         spinner_client = (Spinner) findViewById(R.id.spinner_client);
 
-        edit_purchase_date.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View v)
-            {
-                String date = edit_purchase_date.getText().toString();
-                datePicker.show(getFragmentManager(), "estimate_date");
-            }
+        edit_purchase_date.setOnClickListener(v -> {
+            String date = edit_purchase_date.getText().toString();
+            datePicker.show(getFragmentManager(), "estimate_date");
         });
 
-        edit_purchase_due_date.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View v)
-            {
-                String date = edit_purchase_due_date.getText().toString();
-                datePicker.show(getFragmentManager(), "estimate_due_date");
-            }
+        edit_purchase_due_date.setOnClickListener(v -> {
+            String date = edit_purchase_due_date.getText().toString();
+            datePicker.show(getFragmentManager(), "estimate_due_date");
         });
 
         edit_tax_rate.addTextChangedListener(new TextWatcher()
@@ -298,34 +276,28 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         });
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.add_item_button);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Intent intent = new Intent(NewPurchaseActivity.this, ItemPickerActivity.class);
-                startActivityForResult(intent, ITEM_PICKER_TAG);
-            }
+        fab.setOnClickListener(view -> {
+            Intent intent = new Intent(NewPurchaseActivity.this, ItemPickerActivity.class);
+            startActivityForResult(intent, ITEM_PICKER_TAG);
         });
 
         FloatingActionButton fab1 = (FloatingActionButton) findViewById(R.id.printOut);
-        fab1.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
+        fab1.setOnClickListener(view -> {
 
-                String path = downloadPDF();
+            String path = downloadPDF();
 
-                if (path.length() == 0) {
-                    Toast.makeText(NewPurchaseActivity.this, getResources().getString(R.string
-                            .pdf_not_created), Toast.LENGTH_SHORT).show();
-                } else {
-                    Intent intent = new Intent(Intent.ACTION_VIEW);
-                    intent.setDataAndType(FileProvider.getUriForFile(NewPurchaseActivity.this, BuildConfig.APPLICATION_ID + ".provider", new File(path)), "application/pdf");
-                    intent.setFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    startActivity(intent);
-                }
-
-
+            if (path.length() == 0) {
+                Toast.makeText(NewPurchaseActivity.this, getResources().getString(R.string
+                        .pdf_not_created), Toast.LENGTH_SHORT).show();
+            } else {
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(FileProvider.getUriForFile(NewPurchaseActivity.this, BuildConfig.APPLICATION_ID + ".provider", new File(path)), "application/pdf");
+                intent.setFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(intent);
             }
+
+
         });
 
         /*AdView mAdView = (AdView) findViewById(R.id.adView);
@@ -362,13 +334,6 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             float tax = preference.getFloat(SettingActivity.KEY_VAT, 0);
             edit_tax_rate.setText((String.valueOf(CommonUtilities.round(tax, 2))));
         }
-    }
-
-    @Override
-    protected void onStop()
-    {
-        super.onStop();
-        MySingleton.getInstance(this).getRequestQueue().cancelAll(TAG);
     }
 
     @Override
@@ -463,7 +428,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
                         Gson json = new Gson();
 
-                        api_parameter.put("items", json.toJson(array_list_items).toString());
+                        api_parameter.put("items", json.toJson(array_list_items));
 
                         RunCreateEstimateService();
                     }
@@ -670,144 +635,114 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         progressDialog.show();
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "clients/get", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
-                        try
-                        {
-                            JSONObject result = ((JSONObject)response.get("data"));
-                            JSONArray clients = (JSONArray)result.get("clients");
-                            JSONArray estimate_lines = (JSONArray)result.get("estimate_lines");
+                (Request.Method.POST, Network.API_URL + "clients/get", api_parameter, response -> {
+                    try {
+                        JSONObject result = ((JSONObject) response.get("data"));
+                        JSONArray clients = (JSONArray) result.get("clients");
+                        JSONArray estimate_lines = (JSONArray) result.get("estimate_lines");
 
-                            Integer estimate_number = helper_string.optInt(result,"estimate_number");
+                        Integer estimate_number = helper_string.optInt(result, "estimate_number");
 
-                            logoImage = helper_string.optString(result, "logo");
+                        logoImage = helper_string.optString(result, "logo");
 
-                            if (estimate_number > 0)
-                            {
-                                edit_purchase_number.setText(String.format("%04d", estimate_number));
-                            }
+                        if (estimate_number > 0) {
+                            edit_purchase_number.setText(String.format("%04d", estimate_number));
+                        }
 
-                            array_list_clients.clear();
-                            array_clients = new String[ clients.length()];
+                        array_list_clients.clear();
+                        array_clients = new String[clients.length()];
 
-                            Integer selected_client_index = 0;
+                        Integer selected_client_index = 0;
 
-                            if (clients.length() > 0) {
-                                for (int i = 0; i < clients.length(); i++) {
-                                    JSONObject obj = clients.getJSONObject(i);
+                        if (clients.length() > 0) {
+                            for (int i = 0; i < clients.length(); i++) {
+                                JSONObject obj = clients.getJSONObject(i);
 
-                                    Client client = new Client();
+                                Client client = new Client();
 
-                                    client.Id = obj.optInt("id");
-                                    client.UserId = obj.optInt("user_id");
-                                    client.Name = helper_string.optString(obj, "name");
-                                    client.Email =  helper_string.optString(obj, "email");
-                                    client.Address1 = helper_string.optString(obj, "address1");
-                                    client.Address2 = helper_string.optString(obj, "address2");
-                                    client.City = helper_string.optString(obj, "city");
-                                    client.State = helper_string.optString(obj, "state");
-                                    client.Postcode = helper_string.optString(obj, "postcode");
-                                    client.Country = helper_string.optString(obj, "country");
+                                client.Id = obj.optInt("id");
+                                client.UserId = obj.optInt("user_id");
+                                client.Name = helper_string.optString(obj, "name");
+                                client.Email = helper_string.optString(obj, "email");
+                                client.Address1 = helper_string.optString(obj, "address1");
+                                client.Address2 = helper_string.optString(obj, "address2");
+                                client.City = helper_string.optString(obj, "city");
+                                client.State = helper_string.optString(obj, "state");
+                                client.Postcode = helper_string.optString(obj, "postcode");
+                                client.Country = helper_string.optString(obj, "country");
 
-                                    array_list_clients.add(client);
-                                    array_clients[i] = client.Name;
+                                array_list_clients.add(client);
+                                array_clients[i] = client.Name;
 
-                                    if (currentEstimate != null && currentEstimate.Id > 0 && currentEstimate.ClientId == client.Id) {
-                                        selected_client_index = i;
-                                        currentClient = client;
-                                    }
-
-                                    /*if (obj.optInt("estimate_number") > 0)
-                                        estimate_number = obj.optInt("estimate_number");*/
+                                if (currentEstimate != null && currentEstimate.Id > 0 && currentEstimate.ClientId == client.Id) {
+                                    selected_client_index = i;
+                                    currentClient = client;
                                 }
 
-                                ArrayAdapter<String> adapter = new ArrayAdapter<String>(NewPurchaseActivity.this, R.layout.custom_simple_spinner_item, array_clients);
-                                spinner_client.setAdapter(adapter);
-                                spinner_client.setSelection(selected_client_index);
+                                /*if (obj.optInt("estimate_number") > 0)
+                                    estimate_number = obj.optInt("estimate_number");*/
                             }
 
-                            if (estimate_lines.length() > 0)
-                            {
-                                for (int i = 0; i < estimate_lines.length(); i++)
-                                {
-                                    JSONObject obj = estimate_lines.getJSONObject(i);
+                            ArrayAdapter<String> adapter = new ArrayAdapter<>(NewPurchaseActivity.this, R.layout.custom_simple_spinner_item, array_clients);
+                            spinner_client.setAdapter(adapter);
+                            spinner_client.setSelection(selected_client_index);
+                        }
 
-                                    Item item = new Item();
-                                    item.Id = obj.optInt("id");
-                                    item.Quantity = obj.optDouble("quantity");
-                                    item.Name = helper_string.optString(obj, "name");
-                                    item.Rate = obj.optDouble("rate");
-                                    item.Description = helper_string.optString(obj, "description");
+                        if (estimate_lines.length() > 0) {
+                            for (int i = 0; i < estimate_lines.length(); i++) {
+                                JSONObject obj = estimate_lines.getJSONObject(i);
 
-                                    array_list_items.add(item);
-                                }
+                                Item item = new Item();
+                                item.Id = obj.optInt("id");
+                                item.Quantity = obj.optDouble("quantity");
+                                item.Name = helper_string.optString(obj, "name");
+                                item.Rate = obj.optDouble("rate");
+                                item.Description = helper_string.optString(obj, "description");
 
-                                calculate_total();
-                                setListViewHeightBasedOnChildren(list_items);
+                                array_list_items.add(item);
                             }
-                        }
-                        catch(Exception ex)
-                        {
-                                Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_LONG).show();
-                        }
 
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
+                            calculate_total();
+                            setListViewHeightBasedOnChildren(list_items);
                         }
+                    } catch (Exception ex) {
+                        Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_LONG).show();
                     }
-                }, new Response.ErrorListener()
-                {
 
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        // TODO Auto-generated method stub
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
+                }, error -> {
+                    // TODO Auto-generated method stub
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(NewPurchaseActivity.this).getRequestQueue();
-
-        //Used to mark the request, so we can cancel it on our onStop method
-        postRequest.setTag(TAG);
-
-        MySingleton.getInstance(NewPurchaseActivity.this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 
     public boolean isFormValid()
@@ -889,7 +824,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             this.context = context;
             this.values = values;
 
-            SharedPreferences settings = context.getSharedPreferences(SESSION_USER, context.MODE_PRIVATE);
+            SharedPreferences settings = context.getSharedPreferences(SESSION_USER, MODE_PRIVATE);
             currency = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
         }
 
@@ -921,16 +856,11 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             text_rate.setText(currency + String.format( "%.2f", item.Quantity * item.Rate));
             text_quantity.setText(item.Quantity + " x " + String.format( "%.2f", item.Rate));
 
-            image_remove_item.setOnClickListener(new View.OnClickListener()
-            {
-                @Override
-                public void onClick(View v)
-                {
-                    array_list_items.remove(Integer.parseInt(v.getTag().toString()));
-                    adapter_item.notifyDataSetChanged();
-                    calculate_total();
-                    setListViewHeightBasedOnChildren(list_items);
-                }
+            image_remove_item.setOnClickListener(v -> {
+                array_list_items.remove(Integer.parseInt(v.getTag().toString()));
+                adapter_item.notifyDataSetChanged();
+                calculate_total();
+                setListViewHeightBasedOnChildren(list_items);
             });
 
             return rowView;
@@ -1239,232 +1169,161 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         progressDialog.show();
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "estimates/create", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
+                (Request.Method.POST, Network.API_URL + "estimates/create", api_parameter, response -> {
 
-                        VolleyLog.d("estimates/create : " + response.toString());
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
+                    VolleyLog.d("estimates/create : " + response.toString());
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
 
-                        try {
-                            Estimate estimate = getEstimate(response.getJSONObject("estimate_ret"));
-                            Intent intent = new Intent(NewPurchaseActivity.this, NewPurchaseActivity.class);
-                            intent.putExtra("data", estimate);
-                            startActivity(intent);
-                            finish();
-                            return;
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                        }
-
-                        Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        intent.putExtra("tab", "purchases");
+                    try {
+                        Estimate estimate = getEstimate(response.getJSONObject("estimate_ret"));
+                        Intent intent = new Intent(NewPurchaseActivity.this, NewPurchaseActivity.class);
+                        intent.putExtra("data", estimate);
                         startActivity(intent);
                         finish();
+                        return;
+                    } catch (JSONException e) {
+                        e.printStackTrace();
                     }
-                }, new Response.ErrorListener()
-                {
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        // TODO Auto-generated method stub
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+                    Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    intent.putExtra("tab", "purchases");
+                    startActivity(intent);
+                    finish();
+                }, error -> {
+                    // TODO Auto-generated method stub
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
+
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(this.getApplicationContext()).getRequestQueue();
-
-        //Used to mark the request, so we can cancel it on our onStop method
-        postRequest.setTag(TAG);
-
-        MySingleton.getInstance(this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 
     public void RunUpdateEstimateAsInvoicedService() {
         progressDialog.show();
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "estimates/invoiced", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
-
-                        Invoice invoice = new Invoice();
-                        invoice.TaxRate = Double.parseDouble(edit_tax_rate.getText().toString().trim());
-                        invoice.ClientId = array_list_clients.get(spinner_client.getSelectedItemPosition()).Id;
-                        invoice.ClientNote = edit_client_notes.getText().toString().trim();
-
-                        Intent intent = new Intent(NewPurchaseActivity.this, NewInvoiceActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        intent.putExtra("data", invoice);
-                        intent.putExtra("items", array_list_items);
-
-                        startActivity(intent);
-                        finish();
+                (Request.Method.POST, Network.API_URL + "estimates/invoiced", api_parameter, response -> {
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
                     }
-                }, new Response.ErrorListener()
-                {
 
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        // TODO Auto-generated method stub
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
+                    Invoice invoice = new Invoice();
+                    invoice.TaxRate = Double.parseDouble(edit_tax_rate.getText().toString().trim());
+                    invoice.ClientId = array_list_clients.get(spinner_client.getSelectedItemPosition()).Id;
+                    invoice.ClientNote = edit_client_notes.getText().toString().trim();
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+                    Intent intent = new Intent(NewPurchaseActivity.this, NewInvoiceActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    intent.putExtra("data", invoice);
+                    intent.putExtra("items", array_list_items);
+
+                    startActivity(intent);
+                    finish();
+                }, error -> {
+                    // TODO Auto-generated method stub
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
+
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(this.getApplicationContext()).getRequestQueue();
-
-        //Used to mark the request, so we can cancel it on our onStop method
-        postRequest.setTag(TAG);
-
-        MySingleton.getInstance(this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 
     public void RunDeleteEstimateService() {
         progressDialog.show();
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "estimates/delete", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
-
-                        Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        intent.putExtra("tab", "purchases");
-                        startActivity(intent);
-                        finish();
+                (Request.Method.POST, Network.API_URL + "estimates/delete", api_parameter, response -> {
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
                     }
-                }, new Response.ErrorListener()
-                {
 
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        // TODO Auto-generated method stub
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
+                    Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    intent.putExtra("tab", "purchases");
+                    startActivity(intent);
+                    finish();
+                }, error -> {
+                    // TODO Auto-generated method stub
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(this.getApplicationContext()).getRequestQueue();
-
-        //Used to mark the request, so we can cancel it on our onStop method
-        postRequest.setTag(TAG);
-
-        MySingleton.getInstance(this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 
     private Estimate getEstimate(JSONObject obj) throws JSONException {
@@ -1486,7 +1345,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             e.printStackTrace();
         }
         try {
-            estimate.IsInvoiced = (obj.getInt("is_invoiced") == 1 ? true : false);
+            estimate.IsInvoiced = (obj.getInt("is_invoiced") == 1);
         } catch (JSONException e) {
             e.printStackTrace();
         }

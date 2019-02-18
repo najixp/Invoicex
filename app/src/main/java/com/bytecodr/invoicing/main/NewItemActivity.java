@@ -1,6 +1,5 @@
 package com.bytecodr.invoicing.main;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -12,19 +11,13 @@ import android.widget.EditText;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
 import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
+import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Item;
-import com.bytecodr.invoicing.network.MySingleton;
 import com.bytecodr.invoicing.network.Network;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdView;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -95,13 +88,6 @@ public class NewItemActivity extends AppCompatActivity
         /*AdView mAdView = (AdView) findViewById(R.id.adView);
         AdRequest adRequest = new AdRequest.Builder().build();
         mAdView.loadAd(adRequest);*/
-    }
-
-    @Override
-    protected void onStop()
-    {
-        super.onStop();
-        MySingleton.getInstance(this).getRequestQueue().cancelAll(TAG);
     }
 
     @Override
@@ -252,141 +238,93 @@ public class NewItemActivity extends AppCompatActivity
         progressDialog.show();
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "items/create", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
-
-                        Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        intent.putExtra("tab", "items");
-                        startActivity(intent);
-                        finish();
+                (Request.Method.POST, Network.API_URL + "items/create", api_parameter, response -> {
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
                     }
-                }, new Response.ErrorListener()
-                {
 
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        // TODO Auto-generated method stub
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
+                    Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    intent.putExtra("tab", "items");
+                    startActivity(intent);
+                    finish();
+                }, error -> {
+                    // TODO Auto-generated method stub
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(NewItemActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(NewItemActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(NewItemActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(NewItemActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(NewItemActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(NewItemActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(this.getApplicationContext()).getRequestQueue();
-
-        //Used to mark the request, so we can cancel it on our onStop method
-        postRequest.setTag(TAG);
-
-        MySingleton.getInstance(this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 
     public void RunDeleteItemService() {
         progressDialog.show();
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "items/delete", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
-
-                        Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
-                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        intent.putExtra("tab", "items");
-                        startActivity(intent);
-                        finish();
+                (Request.Method.POST, Network.API_URL + "items/delete", api_parameter, response -> {
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
                     }
-                }, new Response.ErrorListener()
-                {
 
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        // TODO Auto-generated method stub
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
+                    Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    intent.putExtra("tab", "items");
+                    startActivity(intent);
+                    finish();
+                }, error -> {
+                    // TODO Auto-generated method stub
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(NewItemActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(NewItemActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(NewItemActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(NewItemActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(NewItemActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(NewItemActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(this.getApplicationContext()).getRequestQueue();
-
-        //Used to mark the request, so we can cancel it on our onStop method
-        postRequest.setTag(TAG);
-
-        MySingleton.getInstance(this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 }

@@ -8,45 +8,25 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
-import com.android.volley.NetworkResponse;
-import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.JsonObjectRequest;
 import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
-import com.bytecodr.invoicing.helper.helper_string;
 import com.bytecodr.invoicing.model.Description;
 import com.bytecodr.invoicing.model.Item;
-import com.bytecodr.invoicing.network.MySingleton;
-import com.bytecodr.invoicing.network.Network;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import com.rey.material.widget.Spinner;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.lang.reflect.Array;
 import java.lang.reflect.Type;
 import java.text.NumberFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -55,9 +35,7 @@ import static com.bytecodr.invoicing.App.SERVER_KEY_HASH;
 
 public class ItemPickerActivity extends AppCompatActivity
 {
-    public static final String TAG = "ItemPickerActivity";
     private MaterialDialog progressDialog;
-    private JSONObject api_parameter;
 
     private String userId;
     Item currentItem;
@@ -65,7 +43,6 @@ public class ItemPickerActivity extends AppCompatActivity
 
     private List<Item> array_list_items = new ArrayList<>();
     private List<Description> array_list_descriptions = new ArrayList<>();
-    private String[] array_items;
     Spinner spinner_items;
     Spinner spinner_descriptions;
 
@@ -113,30 +90,22 @@ public class ItemPickerActivity extends AppCompatActivity
         edit_quantity = (EditText) findViewById(R.id.edit_quantity);
 
         spinner_items = (Spinner) findViewById(R.id.spinner_items);
-        spinner_items.setOnItemSelectedListener(new Spinner.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(Spinner parent, View view, int position, long id) {
-                if (position != 0)
-                {
-                    Item item = array_list_items.get(position-1);
+        spinner_items.setOnItemSelectedListener((parent, view, position, id) -> {
+            if (position != 0) {
+                Item item = array_list_items.get(position - 1);
 
-                    edit_name.setText(item.Name);
-                    edit_description.setText(item.Description);
-                    edit_rate.setText(String.format("%.2f", item.Rate));
-                    edit_quantity.setText("1");
-                }
+                edit_name.setText(item.Name);
+                edit_description.setText(item.Description);
+                edit_rate.setText(String.format("%.2f", item.Rate));
+                edit_quantity.setText("1");
             }
         });
 
         spinner_descriptions = (Spinner) findViewById(R.id.spinner_description);
-        spinner_descriptions.setOnItemSelectedListener(new Spinner.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(Spinner parent, View view, int position, long id) {
-                if (position != 0)
-                {
-                    Description description = array_list_descriptions.get(position-1);
-                    edit_description.setText(description.description);
-                }
+        spinner_descriptions.setOnItemSelectedListener((parent, view, position, id) -> {
+            if (position != 0) {
+                Description description = array_list_descriptions.get(position - 1);
+                edit_description.setText(description.description);
             }
         });
 
@@ -152,13 +121,6 @@ public class ItemPickerActivity extends AppCompatActivity
         }
 
         getData();
-    }
-
-    @Override
-    protected void onStop()
-    {
-        super.onStop();
-        MySingleton.getInstance(this).getRequestQueue().cancelAll(TAG);
     }
 
     @Override
@@ -395,7 +357,7 @@ public class ItemPickerActivity extends AppCompatActivity
                             itemArray[i+1] = items.get(i).Name;
                         }
 
-                        ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(ItemPickerActivity.this, R.layout.custom_simple_spinner_item, itemArray);
+                        ArrayAdapter<String> adapter1 = new ArrayAdapter<>(ItemPickerActivity.this, R.layout.custom_simple_spinner_item, itemArray);
                         spinner_items.setAdapter(adapter1);
 
                         int descriptionArraySize = descriptions.size();
@@ -404,7 +366,7 @@ public class ItemPickerActivity extends AppCompatActivity
                         for (int i = 0; i < descriptionArraySize; i++) {
                             descriptionsArray[i+1] = descriptions.get(i).title;
                         }
-                        ArrayAdapter<String> adapter2 = new ArrayAdapter<String>(ItemPickerActivity.this, R.layout.custom_simple_spinner_item, descriptionsArray);
+                        ArrayAdapter<String> adapter2 = new ArrayAdapter<>(ItemPickerActivity.this, R.layout.custom_simple_spinner_item, descriptionsArray);
                         spinner_descriptions.setAdapter(adapter2);
                         dismissProgress();
                     } else {

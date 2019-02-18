@@ -2,13 +2,10 @@ package com.bytecodr.invoicing.main;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
 import android.os.Bundle;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentManager;
-import android.support.v4.app.FragmentTransaction;
 import android.support.design.widget.NavigationView;
-import android.support.v4.content.FileProvider;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
@@ -23,11 +20,7 @@ import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.main.reports.ReportsFragment;
 
 public class MainActivity extends AppCompatActivity
-        implements NavigationView.OnNavigationItemSelectedListener, HomeFragment.OnFragmentInteractionListener,
-        ItemFragment.OnFragmentInteractionListener, DescriptionFragment.OnFragmentInteractionListener,
-        ReportsFragment.OnFragmentInteractionListener, ClientFragment.OnFragmentInteractionListener,
-        InvoiceFragment.OnFragmentInteractionListener, EstimateFragment.OnFragmentInteractionListener,
-        PurchaseFragment.OnFragmentInteractionListener{
+        implements NavigationView.OnNavigationItemSelectedListener {
 
     public static String api_key;
     public static final String TAG = "MainActivity";
@@ -255,11 +248,4 @@ public class MainActivity extends AppCompatActivity
         transaction.addToBackStack(null);
         transaction.commit();
     }
-
-    public void onFragmentInteraction(Uri uri){
-        //you can leave it empty
-    }
-
-
-
 }

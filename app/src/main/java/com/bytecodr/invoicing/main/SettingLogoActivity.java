@@ -6,7 +6,6 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Matrix;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -19,20 +18,14 @@ import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
 import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
+import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.helper.helper_string;
-import com.bytecodr.invoicing.model.Invoice;
-import com.bytecodr.invoicing.network.MySingleton;
 import com.bytecodr.invoicing.network.Network;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -222,90 +215,63 @@ public class SettingLogoActivity extends AppCompatActivity
         progressDialog.show();
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "settings/get", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
-                        try
-                        {
-                            JSONObject result = ((JSONObject)response.get("data"));
-                            JSONObject settings = (JSONObject)result.get("settings");
+                (Request.Method.POST, Network.API_URL + "settings/get", api_parameter, response -> {
+                    try {
+                        JSONObject result = ((JSONObject) response.get("data"));
+                        JSONObject settings = (JSONObject) result.get("settings");
 
-                            String logoBase64 = helper_string.optString(settings, "logo");
+                        String logoBase64 = helper_string.optString(settings, "logo");
 
-                            if (!logoBase64.isEmpty())
-                            {
-                                byte[] decodedString = Base64.decode(logoBase64, Base64.DEFAULT);
-                                Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+                        if (!logoBase64.isEmpty()) {
+                            byte[] decodedString = Base64.decode(logoBase64, Base64.DEFAULT);
+                            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
 
-                                logo_image_view.setImageBitmap(decodedByte);
-                            }
-                            else
-                            {
-                                deleteButton.setVisibility(View.GONE);
-                            }
+                            logo_image_view.setImageBitmap(decodedByte);
+                        } else {
+                            deleteButton.setVisibility(View.GONE);
                         }
-                        catch(Exception ex)
-                        {
-                                Toast.makeText(SettingLogoActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
+                    } catch (Exception ex) {
+                        Toast.makeText(SettingLogoActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
 
-                        }
-
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
                     }
-                }, new Response.ErrorListener()
-                {
 
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        // TODO Auto-generated method stub
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
+                }, error -> {
+                    // TODO Auto-generated method stub
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(SettingLogoActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(SettingLogoActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(SettingLogoActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(SettingLogoActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(SettingLogoActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(SettingLogoActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(SettingLogoActivity.this).getRequestQueue();
-
         //Used to mark the request, so we can cancel it on our onStop method
         postRequest.setTag(MainActivity.TAG);
 
-        MySingleton.getInstance(SettingLogoActivity.this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 
     public void RunUpdateSettingsService()
@@ -313,84 +279,56 @@ public class SettingLogoActivity extends AppCompatActivity
         progressDialog.show();
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "settings/update", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
-                        try
-                        {
-                            JSONObject data = ((JSONObject) response.get("data"));
+                (Request.Method.POST, Network.API_URL + "settings/update", api_parameter, response -> {
+                    try {
+                        JSONObject data = ((JSONObject) response.get("data"));
 
-                            String logoBase64 = data.getString("setting_value");
+                        String logoBase64 = data.getString("setting_value");
 
-                            if (!logoBase64.isEmpty())
-                            {
+                        if (!logoBase64.isEmpty()) {
 
-                                deleteButton.setVisibility(View.VISIBLE);
-                            }
-                            else
-                            {
-                                deleteButton.setVisibility(View.GONE);
-                            }
-
-                            //String logoBase64 = data.getString("logo");
-                            byte[] decodedString = Base64.decode(logoBase64, Base64.DEFAULT);
-                            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-
-                            logo_image_view.setImageBitmap(decodedByte);
-                        }
-                        catch (JSONException ex) {
-                            Toast.makeText(SettingLogoActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
+                            deleteButton.setVisibility(View.VISIBLE);
+                        } else {
+                            deleteButton.setVisibility(View.GONE);
                         }
 
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
+                        //String logoBase64 = data.getString("logo");
+                        byte[] decodedString = Base64.decode(logoBase64, Base64.DEFAULT);
+                        Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+
+                        logo_image_view.setImageBitmap(decodedByte);
+                    } catch (JSONException ex) {
+                        Toast.makeText(SettingLogoActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
                     }
-                }, new Response.ErrorListener()
-                {
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(SettingLogoActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(SettingLogoActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
+                }, error -> {
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(SettingLogoActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(SettingLogoActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(SettingLogoActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(SettingLogoActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(SettingLogoActivity.this).getRequestQueue();
-
-        //Used to mark the request, so we can cancel it on our onStop method
-        postRequest.setTag(TAG);
-
-        MySingleton.getInstance(SettingLogoActivity.this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 
 

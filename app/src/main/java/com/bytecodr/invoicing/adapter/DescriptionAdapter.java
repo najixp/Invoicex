@@ -13,7 +13,6 @@ import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.main.LoginActivity;
 import com.bytecodr.invoicing.main.SettingActivity;
 import com.bytecodr.invoicing.model.Description;
-import com.bytecodr.invoicing.model.Item;
 
 import java.util.ArrayList;
 
@@ -30,7 +29,7 @@ public class DescriptionAdapter extends ArrayAdapter<Description>
         this.context = context;
         this.values = values;
 
-        SharedPreferences settings = context.getSharedPreferences(LoginActivity.SESSION_USER, context.MODE_PRIVATE);
+        SharedPreferences settings = context.getSharedPreferences(LoginActivity.SESSION_USER, Context.MODE_PRIVATE);
         currency = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
     }
 

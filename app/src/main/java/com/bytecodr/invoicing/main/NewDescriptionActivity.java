@@ -11,31 +11,17 @@ import android.widget.EditText;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
-import com.android.volley.NetworkResponse;
-import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.JsonObjectRequest;
-import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Description;
-import com.bytecodr.invoicing.model.Item;
-import com.bytecodr.invoicing.network.MySingleton;
-import com.bytecodr.invoicing.network.Network;
 import com.google.gson.JsonObject;
 
-import org.json.JSONException;
 import org.json.JSONObject;
-
-import java.util.HashMap;
-import java.util.Map;
 
 import retrofit2.Call;
 import retrofit2.Callback;
 
-import static com.bytecodr.invoicing.App.*;
+import static com.bytecodr.invoicing.App.SERVER_KEY_HASH;
+import static com.bytecodr.invoicing.App.getApis;
 
 public class NewDescriptionActivity extends AppCompatActivity {
     public static final String TAG = "NewItemActivity";
@@ -80,7 +66,7 @@ public class NewDescriptionActivity extends AppCompatActivity {
         etTitle = (EditText)findViewById(R.id.etTitle);
         etDescription = (EditText)findViewById(R.id.etDescription);
 
-        description = (Description) getIntent().getParcelableExtra("data");
+        description = getIntent().getParcelableExtra("data");
 
         if (description != null && !userId.equals("-1"))
         {
@@ -97,12 +83,6 @@ public class NewDescriptionActivity extends AppCompatActivity {
         /*AdView mAdView = (AdView) findViewById(R.id.adView);
         AdRequest adRequest = new AdRequest.Builder().build();
         mAdView.loadAd(adRequest);*/
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        MySingleton.getInstance(this).getRequestQueue().cancelAll(TAG);
     }
 
     @Override

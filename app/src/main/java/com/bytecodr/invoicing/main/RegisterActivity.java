@@ -10,15 +10,11 @@ import android.widget.EditText;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
 import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
+import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
-import com.bytecodr.invoicing.network.MySingleton;
 import com.bytecodr.invoicing.network.Network;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -95,108 +91,81 @@ public class RegisterActivity extends AppCompatActivity implements View.OnClickL
         progressDialog.show();
 
         JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "auth/register", api_parameter, new Response.Listener<JSONObject>()
-                {
-                    @Override
-                    public void onResponse(JSONObject response)
-                    {
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
-                        }
-
-                        try
-                        {
-                            JSONObject data = ((JSONObject) response.get("data"));
-
-                            SharedPreferences.Editor user = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE).edit();
-
-                            user.putInt("id", data.getInt("id"));
-                            user.putInt("logged_in", 1);
-                            user.putString("firstname", data.getString("first_name"));
-                            user.putString("lastname", data.getString("last_name"));
-                            user.putString("email", data.getString("email"));
-                            user.putString("api_key", data.getString("api_key"));
-
-                            JsonElement jsonElement = new Gson().fromJson(data.getString("content"), JsonElement.class);
-                            JsonObject jsonObject = jsonElement.getAsJsonObject();
-
-                            try {
-                                user.putString(SettingActivity.KEY_ADDRESS, jsonObject.get(SettingActivity.KEY_ADDRESS).getAsString());
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                            try {
-                                user.putString(SettingActivity.KEY_CURRENCY_SYMBOL, jsonObject.get(SettingActivity.KEY_CURRENCY_SYMBOL).getAsString());
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                            try {
-                                user.putFloat(SettingActivity.KEY_VAT, jsonObject.get(SettingActivity.KEY_VAT).getAsFloat());
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-
-                            user.commit();
-
-                            Intent intent = new Intent(RegisterActivity.this, MainActivity.class);
-                            finish();
-                            startActivity(intent);
-                        }
-                        catch (Exception ex)
-                        {
-                            Toast.makeText(RegisterActivity.this, ex.getMessage(), Toast.LENGTH_SHORT).show();
-                        }
+                (Request.Method.POST, Network.API_URL + "auth/register", api_parameter, response -> {
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
                     }
-                }, new Response.ErrorListener()
-                {
 
-                    @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
-                        // TODO Auto-generated method stub
-                        if (progressDialog != null && progressDialog.isShowing()) {
-                            // If the response is JSONObject instead of expected JSONArray
-                            progressDialog.dismiss();
+                    try {
+                        JSONObject data = ((JSONObject) response.get("data"));
+
+                        SharedPreferences.Editor user = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE).edit();
+
+                        user.putInt("id", data.getInt("id"));
+                        user.putInt("logged_in", 1);
+                        user.putString("firstname", data.getString("first_name"));
+                        user.putString("lastname", data.getString("last_name"));
+                        user.putString("email", data.getString("email"));
+                        user.putString("api_key", data.getString("api_key"));
+
+                        JsonElement jsonElement = new Gson().fromJson(data.getString("content"), JsonElement.class);
+                        JsonObject jsonObject = jsonElement.getAsJsonObject();
+
+                        try {
+                            user.putString(SettingActivity.KEY_ADDRESS, jsonObject.get(SettingActivity.KEY_ADDRESS).getAsString());
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        try {
+                            user.putString(SettingActivity.KEY_CURRENCY_SYMBOL, jsonObject.get(SettingActivity.KEY_CURRENCY_SYMBOL).getAsString());
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        try {
+                            user.putFloat(SettingActivity.KEY_VAT, jsonObject.get(SettingActivity.KEY_VAT).getAsFloat());
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(RegisterActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(RegisterActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
+                        user.commit();
+
+                        Intent intent = new Intent(RegisterActivity.this, MainActivity.class);
+                        finish();
+                        startActivity(intent);
+                    } catch (Exception ex) {
+                        Toast.makeText(RegisterActivity.this, ex.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                }, error -> {
+                    // TODO Auto-generated method stub
+                    if (progressDialog != null && progressDialog.isShowing()) {
+                        // If the response is JSONObject instead of expected JSONArray
+                        progressDialog.dismiss();
+                    }
+
+                    NetworkResponse response = error.networkResponse;
+                    if (response != null && response.data != null) {
+                        try {
+                            JSONObject json = new JSONObject(new String(response.data));
+                            Toast.makeText(RegisterActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
+                        } catch (JSONException e) {
+                            Toast.makeText(RegisterActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
                         }
-                        else
-                        {
-                            Toast.makeText(RegisterActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                        }
+                    } else {
+                        Toast.makeText(RegisterActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
-                Map<String, String> params = new HashMap<String, String>();
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", Network.API_KEY);
                 return params;
             }
         };
 
-        // Get a RequestQueue
-        RequestQueue queue = MySingleton.getInstance(this.getApplicationContext()).getRequestQueue();
-
-        //Used to mark the request, so we can cancel it on our onStop method
-        postRequest.setTag(TAG);
-
-        MySingleton.getInstance(this).addToRequestQueue(postRequest);
+        App.getInstance().addToRequestQueue(postRequest);
     }
 
     public boolean isFormValid()
@@ -240,12 +209,5 @@ public class RegisterActivity extends AppCompatActivity implements View.OnClickL
         }
 
         return isValid;
-    }
-
-    @Override
-    protected void onStop()
-    {
-        super.onStop();
-        MySingleton.getInstance(this).getRequestQueue().cancelAll(TAG);
     }
 }

@@ -1,8 +1,6 @@
 package com.bytecodr.invoicing.main.reports;
 
 import android.app.Activity;
-import android.app.ProgressDialog;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -12,8 +10,6 @@ import android.support.design.widget.TabLayout;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.FileProvider;
 import android.support.v4.view.ViewPager;
-import android.util.Base64;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,33 +18,17 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
-import com.android.volley.NetworkResponse;
-import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.VolleyLog;
-import com.android.volley.toolbox.JsonObjectRequest;
 import com.bytecodr.invoicing.BuildConfig;
-import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.helper.helper_number;
-import com.bytecodr.invoicing.helper.helper_string;
 import com.bytecodr.invoicing.main.LoginActivity;
-import com.bytecodr.invoicing.main.MainActivity;
-import com.bytecodr.invoicing.main.NewInvoiceActivity;
 import com.bytecodr.invoicing.main.SettingActivity;
-import com.bytecodr.invoicing.model.Invoice;
 import com.bytecodr.invoicing.network.ErrorResponse;
-import com.bytecodr.invoicing.network.MySingleton;
-import com.bytecodr.invoicing.network.Network;
 import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.Element;
 import com.itextpdf.text.Font;
-import com.itextpdf.text.Image;
 import com.itextpdf.text.PageSize;
 import com.itextpdf.text.Phrase;
 import com.itextpdf.text.Rectangle;
@@ -58,22 +38,14 @@ import com.itextpdf.text.pdf.PdfContentByte;
 import com.itextpdf.text.pdf.PdfWriter;
 import com.itextpdf.text.pdf.draw.LineSeparator;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-
-import me.zhanghai.android.materialprogressbar.MaterialProgressBar;
 
 import static android.content.Context.MODE_PRIVATE;
 import static com.bytecodr.invoicing.main.LoginActivity.SESSION_USER;
@@ -109,8 +81,6 @@ public class ReportsFragment
 
     private List<Item> mInvoice;
     private List<Item> mPurchase;
-
-    private OnFragmentInteractionListener mListener;
 
     private ReportsFragmentModel mModel;
 
@@ -191,23 +161,6 @@ public class ReportsFragment
         tvDate.setText(dateFormat.format(new Date()));
     }
 
-    @Override
-    public void onAttach(Context context) {
-        super.onAttach(context);
-        if (context instanceof OnFragmentInteractionListener) {
-            mListener = (OnFragmentInteractionListener) context;
-        } else {
-            throw new RuntimeException(context.toString()
-                    + " must implement OnFragmentInteractionListener");
-        }
-    }
-
-    @Override
-    public void onDetach() {
-        super.onDetach();
-        mListener = null;
-    }
-
 
 
     /* BEG MODEL CALLBACKS */
@@ -219,7 +172,7 @@ public class ReportsFragment
         mPurchase = purchases;
 
         Activity activity = getActivity();
-        SharedPreferences settings = activity.getSharedPreferences(LoginActivity.SESSION_USER, activity.MODE_PRIVATE);
+        SharedPreferences settings = activity.getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
         String currencySymbol = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
         tvInvoiceSum.setText(currencySymbol + " " + String.valueOf(invoiceSum));
         tvPurchaseSum.setText(currencySymbol + " " + String.valueOf(purchaseSum));
@@ -237,11 +190,6 @@ public class ReportsFragment
         Toast.makeText(getContext(), "Failed to load data", Toast.LENGTH_SHORT).show();
         hideDialog();
     }
-
-    /* BEG MODEL CALLBACKS */
-
-
-
 
     private void showDialog() {
         if (progressDialog!=null && !progressDialog.isShowing())
@@ -270,9 +218,6 @@ public class ReportsFragment
                 startActivity(intent);
             }
         }
-    }
-
-    public interface OnFragmentInteractionListener {
     }
 
     /*------------------------------------- Download PDF Begins ----------------------------------*/

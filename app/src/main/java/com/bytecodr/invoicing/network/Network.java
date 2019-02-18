@@ -20,15 +20,8 @@ public class Network
         final ConnectivityManager connMgr = (ConnectivityManager) context
                 .getSystemService(Context.CONNECTIVITY_SERVICE);
 
-        if (connMgr.getActiveNetworkInfo() != null
+        return connMgr.getActiveNetworkInfo() != null
                 && connMgr.getActiveNetworkInfo().isAvailable()
-                && connMgr.getActiveNetworkInfo().isConnected())
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+                && connMgr.getActiveNetworkInfo().isConnected();
     }
 }

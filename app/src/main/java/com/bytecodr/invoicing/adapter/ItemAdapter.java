@@ -28,7 +28,7 @@ public class ItemAdapter extends ArrayAdapter<Item>
         this.context = context;
         this.values = values;
 
-        SharedPreferences settings = context.getSharedPreferences(LoginActivity.SESSION_USER, context.MODE_PRIVATE);
+        SharedPreferences settings = context.getSharedPreferences(LoginActivity.SESSION_USER, Context.MODE_PRIVATE);
         currency = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
     }
 
