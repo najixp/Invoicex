@@ -3,7 +3,12 @@ package com.bytecodr.invoicing.model;
 import android.os.Parcel;
 import android.os.Parcelable;
 
-public class Description implements Parcelable {
+import io.realm.RealmObject;
+import io.realm.annotations.PrimaryKey;
+
+public class Description extends RealmObject implements Parcelable {
+
+    @PrimaryKey
     public String id;
     public String title;
     public String description;
@@ -37,4 +42,7 @@ public class Description implements Parcelable {
             return new Description[size];
         }
     };
+
+    public Description() {
+    }
 }

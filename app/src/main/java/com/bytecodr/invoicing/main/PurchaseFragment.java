@@ -17,14 +17,13 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
-import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.VolleyLog;
 import com.android.volley.toolbox.JsonObjectRequest;
+import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.adapter.EstimateAdapter;
 import com.bytecodr.invoicing.helper.helper_string;
@@ -39,6 +38,8 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+
+import io.realm.Realm;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -98,6 +99,11 @@ public class PurchaseFragment extends Fragment
         FloatingActionButton add_client_button = (FloatingActionButton) view.findViewById(R.id.add_button);
         add_client_button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+                if (!CommonUtilities.isOnline(getContext())) {
+                    Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 Intent intent = new Intent(getActivity(), NewPurchaseActivity.class);
                 startActivityForResult(intent , 1);
             }
@@ -117,6 +123,11 @@ public class PurchaseFragment extends Fragment
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id)
             {
+                if (!CommonUtilities.isOnline(getContext())) {
+                    Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 Estimate estimate = adapter.getItem(position);
 
                 Intent intent = new Intent(getActivity(), NewPurchaseActivity.class);
@@ -214,43 +225,51 @@ public class PurchaseFragment extends Fragment
                     {
                         try
                         {
-
                             VolleyLog.d("Response/Purchase: " + response.toString());
 
                             JSONObject result = ((JSONObject)response.get("data"));
                             JSONArray estimates = (JSONArray)result.get("estimates");
 
                             array_list.clear();
-                            for (int i = 0; i < estimates.length(); i++) {
-                                JSONObject obj = estimates.getJSONObject(i);
+                            try (Realm realm = Realm.getDefaultInstance()) {
+                                realm.executeTransaction(realm1 -> realm1.where(Estimate.class).findAll().deleteAllFromRealm());
 
-                                Estimate estimate = new Estimate();
+                                for (int i = 0; i < estimates.length(); i++) {
+                                    JSONObject obj = estimates.getJSONObject(i);
 
-                                estimate.Id = obj.optInt("id");
-                                estimate.UserId = obj.optInt("user_id");
+                                    Estimate estimate = new Estimate();
 
-                                estimate.EstimateNumber = obj.getInt("estimate_number");
-                                estimate.ClientName = helper_string.optString(obj, "client_name");
-                                estimate.ClientId = obj.getInt("client_id");
-                                estimate.ClientNote = helper_string.optString(obj, "notes");
-                                estimate.EstimateDate = obj.optInt("estimate_date", 0);
-                                estimate.EstimateDueDate = obj.optInt("due_date", 0);
-                                estimate.TaxRate = obj.getDouble("tax_rate");
-                                estimate.TotalMoney = obj.getDouble("total");
-                                estimate.IsInvoiced = (obj.getInt("is_invoiced") == 1 ? true : false);
+                                    estimate.Id = obj.optInt("id");
+                                    estimate.UserId = obj.optInt("user_id");
 
-                                estimate.Created = obj.optInt("created_on", 0);
-                                estimate.Updated = obj.optInt("updated_on", 0);
+                                    estimate.EstimateNumber = obj.getInt("estimate_number");
+                                    estimate.ClientName = helper_string.optString(obj, "client_name");
+                                    estimate.ClientId = obj.getInt("client_id");
+                                    estimate.ClientNote = helper_string.optString(obj, "notes");
+                                    estimate.EstimateDate = obj.optInt("estimate_date", 0);
+                                    estimate.EstimateDueDate = obj.optInt("due_date", 0);
+                                    estimate.TaxRate = obj.getDouble("tax_rate");
+                                    estimate.TotalMoney = obj.getDouble("total");
+                                    estimate.IsInvoiced = (obj.getInt("is_invoiced") == 1);
 
-                                array_list.add(estimate);
+                                    estimate.Created = obj.optInt("created_on", 0);
+                                    estimate.Updated = obj.optInt("updated_on", 0);
+
+                                    array_list.add(estimate);
+                                    realm.executeTransaction(realm12 -> realm12.insertOrUpdate(estimate));
+                                }
                             }
 
                             adapter.notifyDataSetChanged();
                         }
                         catch(Exception ex)
                         {
-                            if (isAdded()) {
-                                Toast.makeText(getContext(), R.string.error_try_again_support, Toast.LENGTH_LONG).show();
+                            Toast.makeText(getContext(), R.string.offline_mode, Toast.LENGTH_LONG).show();
+
+                            try (Realm realm = Realm.getDefaultInstance()) {
+                                array_list.clear();
+                                array_list.addAll(realm.copyFromRealm(realm.where(Estimate.class).findAll()));
+                                adapter.notifyDataSetChanged();
                             }
                         }
 
@@ -271,30 +290,19 @@ public class PurchaseFragment extends Fragment
                             progressDialog.dismiss();
                         }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(getContext(), json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(getContext(), R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
-                        }
-                        else
-                        {
-                            Toast.makeText(getContext(), error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(getContext(), R.string.offline_mode, Toast.LENGTH_LONG).show();
+
+                        try (Realm realm = Realm.getDefaultInstance()) {
+                            array_list.clear();
+                            array_list.addAll(realm.copyFromRealm(realm.where(Estimate.class).findAll()));
+                            adapter.notifyDataSetChanged();
                         }
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
+            public Map<String, String> getHeaders() {
                 Map<String, String> params = new HashMap<String, String>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;

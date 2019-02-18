@@ -2,6 +2,8 @@ package com.bytecodr.invoicing;
 
 import android.app.Application;
 
+import io.realm.Realm;
+import io.realm.RealmConfiguration;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
@@ -12,10 +14,20 @@ public class App extends Application {
     private static final String BASE_URL = "http://soldv.com/gold/index.php/";
     public static final String SERVER_KEY_HASH = "d4c8255fd7e91f8e3a9c3af31ff8274a";
 
+    final static int dbSchemaVersion = 1;
+
     private static Retrofit retrofit = null;
     @Override
     public void onCreate() {
         super.onCreate();
+
+        Realm.init(getApplicationContext());
+
+        RealmConfiguration realmConfiguration = new RealmConfiguration.Builder()
+                .schemaVersion(dbSchemaVersion)
+                .build();
+
+        Realm.setDefaultConfiguration(realmConfiguration);
     }
 
     private static OkHttpClient buildClient() {
@@ -39,5 +51,4 @@ public class App extends Application {
     public static Apis getApis() {
         return getClient().create(Apis.class);
     }
-
 }

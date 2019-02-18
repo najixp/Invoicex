@@ -17,22 +17,18 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
-import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
+import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.adapter.ClientAdapter;
 import com.bytecodr.invoicing.helper.helper_string;
 import com.bytecodr.invoicing.model.Client;
-import com.bytecodr.invoicing.model.Item;
 import com.bytecodr.invoicing.network.MySingleton;
 import com.bytecodr.invoicing.network.Network;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdView;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -41,6 +37,8 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+
+import io.realm.Realm;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -100,6 +98,11 @@ public class ClientFragment extends Fragment
         FloatingActionButton add_client_button = (FloatingActionButton) view.findViewById(R.id.add_button);
         add_client_button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+                if (!CommonUtilities.isOnline(getContext())) {
+                    Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 Intent intent = new Intent(getActivity(), NewClientActivity.class);
                 startActivityForResult(intent , 1);
             }
@@ -119,6 +122,11 @@ public class ClientFragment extends Fragment
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id)
             {
+                if (!CommonUtilities.isOnline(getContext())) {
+                    Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 Client item = adapter.getItem(position);
 
                 Intent intent = new Intent(getActivity(), NewClientActivity.class);
@@ -220,37 +228,46 @@ public class ClientFragment extends Fragment
                             JSONArray items = (JSONArray)result.get("clients");
 
                             array_list.clear();
-                            for (int i = 0; i < items.length(); i++) {
-                                JSONObject obj = items.getJSONObject(i);
+                            try (Realm realm = Realm.getDefaultInstance()) {
+                                realm.executeTransaction(realm1 -> realm1.where(Client.class).findAll().deleteAllFromRealm());
 
-                                Client item = new Client();
+                                for (int i = 0; i < items.length(); i++) {
+                                    JSONObject obj = items.getJSONObject(i);
 
-                                item.Id = obj.optInt("id");
-                                item.UserId = obj.optInt("user_id");
+                                    Client item = new Client();
 
-                                item.Name = helper_string.optString(obj, "name");
-                                item.Email = helper_string.optString(obj, "email");
-                                item.Address1 = helper_string.optString(obj, "address1");
-                                item.Address2 = helper_string.optString(obj, "address2");
+                                    item.Id = obj.optInt("id");
+                                    item.UserId = obj.optInt("user_id");
 
-                                item.City = helper_string.optString(obj, "city");
-                                item.State = helper_string.optString(obj, "state");
-                                item.Postcode = helper_string.optString(obj, "postcode");
-                                item.Country = helper_string.optString(obj, "country");
-                                item.TotalMoney = obj.optDouble("total", 0);;
+                                    item.Name = helper_string.optString(obj, "name");
+                                    item.Email = helper_string.optString(obj, "email");
+                                    item.Address1 = helper_string.optString(obj, "address1");
+                                    item.Address2 = helper_string.optString(obj, "address2");
 
-                                item.Created = obj.optInt("created_on", 0);
-                                item.Updated = obj.optInt("updated_on", 0);
+                                    item.City = helper_string.optString(obj, "city");
+                                    item.State = helper_string.optString(obj, "state");
+                                    item.Postcode = helper_string.optString(obj, "postcode");
+                                    item.Country = helper_string.optString(obj, "country");
+                                    item.TotalMoney = obj.optDouble("total", 0);
 
-                                array_list.add(item);
+                                    item.Created = obj.optInt("created_on", 0);
+                                    item.Updated = obj.optInt("updated_on", 0);
+
+                                    array_list.add(item);
+                                    realm.executeTransaction(realm12 -> realm12.insertOrUpdate(item));
+                                }
                             }
 
                             adapter.notifyDataSetChanged();
                         }
                         catch(Exception ex)
                         {
-                            if (isAdded()) {
-                                Toast.makeText(getContext(), R.string.error_try_again_support, Toast.LENGTH_LONG).show();
+                            Toast.makeText(getContext(), R.string.offline_mode, Toast.LENGTH_LONG).show();
+
+                            try (Realm realm = Realm.getDefaultInstance()) {
+                                array_list.clear();
+                                array_list.addAll(realm.copyFromRealm(realm.where(Client.class).findAll()));
+                                adapter.notifyDataSetChanged();
                             }
                         }
 
@@ -263,38 +280,26 @@ public class ClientFragment extends Fragment
                 {
 
                     @Override
-                    public void onErrorResponse(VolleyError error)
-                    {
+                    public void onErrorResponse(VolleyError error) {
                         // TODO Auto-generated method stub
                         if (progressDialog != null && progressDialog.isShowing()) {
                             // If the response is JSONObject instead of expected JSONArray
                             progressDialog.dismiss();
                         }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(getContext(), json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(getContext(), R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
-                        }
-                        else
-                        {
-                            Toast.makeText(getContext(), error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(getContext(), R.string.offline_mode, Toast.LENGTH_LONG).show();
+
+                        try (Realm realm = Realm.getDefaultInstance()) {
+                            array_list.clear();
+                            array_list.addAll(realm.copyFromRealm(realm.where(Client.class).findAll()));
+                            adapter.notifyDataSetChanged();
                         }
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
+            public Map<String, String> getHeaders() {
                 Map<String, String> params = new HashMap<String, String>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;

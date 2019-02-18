@@ -18,13 +18,12 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.AuthFailureError;
-import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
+import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.adapter.InvoiceAdapter;
 import com.bytecodr.invoicing.helper.helper_string;
@@ -33,7 +32,6 @@ import com.bytecodr.invoicing.network.MySingleton;
 import com.bytecodr.invoicing.network.Network;
 import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.InterstitialAd;
 
 import org.json.JSONArray;
@@ -43,6 +41,8 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+
+import io.realm.Realm;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -108,6 +108,11 @@ public class InvoiceFragment extends Fragment
                 //If you want to show InterstitialAd ad, uncomment this line AND comment out the two lines below with the intent.
                 //if (mInterstitialAd.isLoaded()) mInterstitialAd.show();
 
+                if (!CommonUtilities.isOnline(getContext())) {
+                    Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 Intent intent = new Intent(getActivity(), NewInvoiceActivity.class);
                 startActivityForResult(intent , 1);
             }
@@ -127,6 +132,11 @@ public class InvoiceFragment extends Fragment
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id)
             {
+                if (!CommonUtilities.isOnline(getContext())) {
+                    Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 Invoice item = adapter.getItem(position);
 
                 Intent intent = new Intent(getActivity(), NewInvoiceActivity.class);
@@ -149,6 +159,11 @@ public class InvoiceFragment extends Fragment
         mInterstitialAd.setAdListener(new AdListener() {
             @Override
             public void onAdClosed() {
+                if (!CommonUtilities.isOnline(getContext())) {
+                    Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 Intent intent = new Intent(getActivity(), NewInvoiceActivity.class);
                 startActivityForResult(intent , 1);
             }
@@ -244,36 +259,45 @@ public class InvoiceFragment extends Fragment
                             Log.e("INVOICES", invoices.toString());
 
                             array_list.clear();
-                            for (int i = 0; i < invoices.length(); i++) {
-                                JSONObject obj = invoices.getJSONObject(i);
+                            try (Realm realm = Realm.getDefaultInstance()) {
+                                realm.executeTransaction(realm1 -> realm1.where(Invoice.class).findAll().deleteAllFromRealm());
 
-                                Invoice invoice = new Invoice();
+                                for (int i = 0; i < invoices.length(); i++) {
+                                    JSONObject obj = invoices.getJSONObject(i);
 
-                                invoice.Id = obj.optInt("id");
-                                invoice.UserId = obj.optInt("user_id");
+                                    Invoice invoice = new Invoice();
 
-                                invoice.InvoiceNumber = obj.getInt("invoice_number");
-                                invoice.ClientName = helper_string.optString(obj, "client_name");
-                                invoice.ClientId = obj.getInt("client_id");
-                                invoice.ClientNote = helper_string.optString(obj, "notes");
-                                invoice.InvoiceDate = obj.optInt("invoice_date", 0);
-                                invoice.InvoiceDueDate = obj.optInt("due_date", 0);
-                                invoice.TaxRate = obj.getDouble("tax_rate");
-                                invoice.TotalMoney = obj.getDouble("total");
-                                invoice.IsPaid = (obj.getInt("is_paid") == 1 ? true : false);
+                                    invoice.Id = obj.optInt("id");
+                                    invoice.UserId = obj.optInt("user_id");
 
-                                invoice.Created = obj.optInt("created_on", 0);
-                                invoice.Updated = obj.optInt("updated_on", 0);
+                                    invoice.InvoiceNumber = obj.getInt("invoice_number");
+                                    invoice.ClientName = helper_string.optString(obj, "client_name");
+                                    invoice.ClientId = obj.getInt("client_id");
+                                    invoice.ClientNote = helper_string.optString(obj, "notes");
+                                    invoice.InvoiceDate = obj.optInt("invoice_date", 0);
+                                    invoice.InvoiceDueDate = obj.optInt("due_date", 0);
+                                    invoice.TaxRate = obj.getDouble("tax_rate");
+                                    invoice.TotalMoney = obj.getDouble("total");
+                                    invoice.IsPaid = (obj.getInt("is_paid") == 1);
 
-                                array_list.add(invoice);
+                                    invoice.Created = obj.optInt("created_on", 0);
+                                    invoice.Updated = obj.optInt("updated_on", 0);
+
+                                    array_list.add(invoice);
+                                    realm.executeTransaction(realm12 -> realm12.insertOrUpdate(invoice));
+                                }
                             }
 
                             adapter.notifyDataSetChanged();
                         }
                         catch(Exception ex)
                         {
-                            if (isAdded()) {
-                                Toast.makeText(getContext(), R.string.error_try_again_support, Toast.LENGTH_LONG).show();
+                            Toast.makeText(getContext(), R.string.offline_mode, Toast.LENGTH_LONG).show();
+
+                            try (Realm realm = Realm.getDefaultInstance()) {
+                                array_list.clear();
+                                array_list.addAll(realm.copyFromRealm(realm.where(Invoice.class).findAll()));
+                                adapter.notifyDataSetChanged();
                             }
                         }
 
@@ -294,30 +318,19 @@ public class InvoiceFragment extends Fragment
                             progressDialog.dismiss();
                         }
 
-                        NetworkResponse response = error.networkResponse;
-                        if (response != null && response.data != null)
-                        {
-                            try
-                            {
-                                JSONObject json = new JSONObject(new String(response.data));
-                                Toast.makeText(getContext(), json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                            }
-                            catch (JSONException e)
-                            {
-                                Toast.makeText(getContext(), R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                            }
-                        }
-                        else
-                        {
-                            Toast.makeText(getContext(), error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(getContext(), R.string.offline_mode, Toast.LENGTH_LONG).show();
+
+                        try (Realm realm = Realm.getDefaultInstance()) {
+                            array_list.clear();
+                            array_list.addAll(realm.copyFromRealm(realm.where(Invoice.class).findAll()));
+                            adapter.notifyDataSetChanged();
                         }
                     }
                 })
         {
 
             @Override
-            public Map<String, String> getHeaders() throws AuthFailureError
-            {
+            public Map<String, String> getHeaders() {
                 Map<String, String> params = new HashMap<String, String>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;

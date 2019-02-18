@@ -127,4 +127,6 @@
     <string name="invoice_total">اجمالي المبيعات</string>
     <string name="purchase_total">اجمالي المشتروات</string>
     <string name="difference">الفرق</string>
+    <string name="offline_mode">Offline mode</string>
+    <string name="not_applicable">N/A</string>
 </resources>

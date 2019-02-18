@@ -3,11 +3,20 @@ package com.bytecodr.invoicing.model;
 import java.io.Serializable;
 import java.util.Date;
 
+import io.realm.RealmObject;
+import io.realm.annotations.PrimaryKey;
+
 /**
  * Created by GuriSingh on 08/05/2016.
  */
-public class Invoice extends BaseModel implements Serializable
-{
+public class Invoice extends RealmObject implements Serializable {
+    @PrimaryKey
+    public long Id;
+    public long UserId;
+
+    public int Updated;
+    public int Created;
+
     public long ClientId;
     public String ClientName;
     public long InvoiceNumber;

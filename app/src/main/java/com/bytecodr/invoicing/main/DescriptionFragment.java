@@ -17,6 +17,7 @@ import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
 import com.bytecodr.invoicing.App;
+import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.adapter.DescriptionAdapter;
 import com.bytecodr.invoicing.model.Description;
@@ -32,6 +33,7 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.realm.Realm;
 import retrofit2.Call;
 import retrofit2.Callback;
 
@@ -101,6 +103,11 @@ public class DescriptionFragment extends Fragment {
         FloatingActionButton add_client_button = (FloatingActionButton) view.findViewById(R.id.add_button);
         add_client_button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+                if (!CommonUtilities.isOnline(getContext())) {
+                    Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 Intent intent = new Intent(getActivity(), NewDescriptionActivity.class);
                 startActivityForResult(intent , 1);
             }
@@ -120,6 +127,11 @@ public class DescriptionFragment extends Fragment {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id)
             {
+                if (!CommonUtilities.isOnline(getContext())) {
+                    Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 Description description = adapter.getItem(position);
 
                 Intent intent = new Intent(getActivity(), NewDescriptionActivity.class);
@@ -206,7 +218,14 @@ public class DescriptionFragment extends Fragment {
                         JsonElement dataJe = responseJo.get("desc_data");
                         Type type = new TypeToken<List<Description>>(){}.getType();
                         List<Description> descriptions = new Gson().fromJson(dataJe, type);
+                        array_list.clear();
                         array_list.addAll(descriptions);
+                        try (Realm realm = Realm.getDefaultInstance()) {
+                            realm.executeTransaction(realm1 -> {
+                                realm1.where(Description.class).findAll().deleteAllFromRealm();
+                                realm1.insertOrUpdate(descriptions);
+                            });
+                        }
                         adapter.notifyDataSetChanged();
                         dismissProgress();
                     } else {
@@ -226,12 +245,15 @@ public class DescriptionFragment extends Fragment {
     }
 
     private void failed() {
-        dismissProgress();
-        try {
-            Toast.makeText(getContext(), "Failed", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            e.printStackTrace();
+        Toast.makeText(getContext(), R.string.offline_mode, Toast.LENGTH_LONG).show();
+
+        try (Realm realm = Realm.getDefaultInstance()) {
+            array_list.clear();
+            array_list.addAll(realm.copyFromRealm(realm.where(Description.class).findAll()));
+            adapter.notifyDataSetChanged();
         }
+
+        dismissProgress();
     }
 
     private void dismissProgress() {
