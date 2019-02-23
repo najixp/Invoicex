@@ -31,7 +31,4 @@ public class EstimateItem extends RealmObject implements Serializable {
     public double getTotal() {
         return Quantity * Rate;
     }
-
-    public boolean pendingUpdate = false;
-    public boolean pendingDelete = false;
 }

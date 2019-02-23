@@ -10,28 +10,19 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
-import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Description;
 import com.bytecodr.invoicing.model.InvoiceItem;
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
+import com.bytecodr.invoicing.model.Item;
 import com.rey.material.widget.Spinner;
 
-import java.lang.reflect.Type;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-
-import static com.bytecodr.invoicing.App.SERVER_KEY_HASH;
+import io.realm.Realm;
 
 public class InvoiceItemPickerActivity extends AppCompatActivity {
     private MaterialDialog progressDialog;
@@ -40,7 +31,7 @@ public class InvoiceItemPickerActivity extends AppCompatActivity {
     InvoiceItem currentItem;
     Integer itemPosition;
 
-    private List<InvoiceItem> array_list_items = new ArrayList<>();
+    private List<Item> array_list_items = new ArrayList<>();
     private List<Description> array_list_descriptions = new ArrayList<>();
     Spinner spinner_items;
     Spinner spinner_descriptions;
@@ -89,7 +80,7 @@ public class InvoiceItemPickerActivity extends AppCompatActivity {
         spinner_items = (Spinner) findViewById(R.id.spinner_items);
         spinner_items.setOnItemSelectedListener((parent, view, position, id) -> {
             if (position != 0) {
-                InvoiceItem item = array_list_items.get(position - 1);
+                Item item = array_list_items.get(position - 1);
 
                 edit_name.setText(item.Name);
                 edit_description.setText(item.Description);
@@ -116,7 +107,32 @@ public class InvoiceItemPickerActivity extends AppCompatActivity {
             edit_quantity.setText(String.valueOf(currentItem.Quantity));
         }
 
-        getData();
+        try (Realm realm = Realm.getDefaultInstance()) {
+            List<Item> items = realm.copyFromRealm(realm.where(Item.class).findAll());
+            List<Description> descriptions = realm.copyFromRealm(realm.where(Description.class).findAll());
+
+            array_list_items = items;
+            array_list_descriptions = descriptions;
+
+            int itemArraySize = items.size();
+            String[] itemArray = new String[itemArraySize + 1];
+            itemArray[0] = " - Select an item - ";
+            for (int i = 0; i < itemArraySize; i++) {
+                itemArray[i + 1] = items.get(i).Name;
+            }
+
+            ArrayAdapter<String> adapter1 = new ArrayAdapter<>(InvoiceItemPickerActivity.this, R.layout.custom_simple_spinner_item, itemArray);
+            spinner_items.setAdapter(adapter1);
+
+            int descriptionArraySize = descriptions.size();
+            String[] descriptionsArray = new String[descriptionArraySize + 1];
+            descriptionsArray[0] = " - Select a description - ";
+            for (int i = 0; i < descriptionArraySize; i++) {
+                descriptionsArray[i + 1] = descriptions.get(i).title;
+            }
+            ArrayAdapter<String> adapter2 = new ArrayAdapter<>(InvoiceItemPickerActivity.this, R.layout.custom_simple_spinner_item, descriptionsArray);
+            spinner_descriptions.setAdapter(adapter2);
+        }
     }
 
     @Override
@@ -303,93 +319,4 @@ public class InvoiceItemPickerActivity extends AppCompatActivity {
 
         MySingleton.getInstance(ItemPickerActivity.this).addToRequestQueue(postRequest);
     }*/
-
-    public void getData() {
-        progressDialog.show();
-        App.getInstance().api.getDescriptions(SERVER_KEY_HASH, userId).enqueue(new Callback<JsonObject>() {
-            @Override
-            public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
-                if (response.isSuccessful()) {
-                    JsonObject responseJo = response.body();
-                    String status = responseJo.get("status").getAsString();
-                    if (status.equals("true")) {
-                        JsonElement itemDataJe = responseJo.get("item_data");
-                        JsonElement descDataJe = responseJo.get("desc_data");
-                        Type type1 = new TypeToken<List<InvoiceItem>>() {
-                        }.getType();
-                        Type type2 = new TypeToken<List<Description>>() {
-                        }.getType();
-
-                        List<InvoiceItem> items;
-                        try {
-                            items = new Gson().fromJson(itemDataJe, type1);
-                        } catch (RuntimeException e) {
-                            items = new ArrayList<>();
-                        }
-
-                        List<Description> descriptions;
-                        try {
-                            descriptions = new Gson().fromJson(descDataJe, type2);
-                        } catch (RuntimeException e) {
-                            descriptions = new ArrayList<>();
-                        }
-
-                        array_list_items = items;
-                        array_list_descriptions = descriptions;
-
-                        int itemArraySize = items.size();
-                        String[] itemArray = new String[itemArraySize + 1];
-                        itemArray[0] = " - Select an item - ";
-                        for (int i = 0; i < itemArraySize; i++) {
-                            itemArray[i + 1] = items.get(i).Name;
-                        }
-
-                        ArrayAdapter<String> adapter1 = new ArrayAdapter<>(InvoiceItemPickerActivity.this, R.layout.custom_simple_spinner_item, itemArray);
-                        spinner_items.setAdapter(adapter1);
-
-                        int descriptionArraySize = descriptions.size();
-                        String[] descriptionsArray = new String[descriptionArraySize + 1];
-                        descriptionsArray[0] = " - Select a description - ";
-                        for (int i = 0; i < descriptionArraySize; i++) {
-                            descriptionsArray[i + 1] = descriptions.get(i).title;
-                        }
-                        ArrayAdapter<String> adapter2 = new ArrayAdapter<>(InvoiceItemPickerActivity.this, R.layout.custom_simple_spinner_item, descriptionsArray);
-                        spinner_descriptions.setAdapter(adapter2);
-                        dismissProgress();
-                    } else {
-                        failed();
-                    }
-
-                } else {
-                    failed();
-                }
-            }
-
-            @Override
-            public void onFailure(Call<JsonObject> call, Throwable t) {
-                failed();
-            }
-        });
-    }
-
-    private void failed() {
-        dismissProgress();
-        try {
-            Toast.makeText(this, "Failed", Toast.LENGTH_SHORT).show();
-            finish();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void dismissProgress() {
-        try {
-            if (progressDialog != null && progressDialog.isShowing()) {
-                // If the response is JSONObject instead of expected JSONArray
-                progressDialog.dismiss();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 }

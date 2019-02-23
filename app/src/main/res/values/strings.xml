@@ -129,4 +129,7 @@
     <string name="difference">الفرق</string>
     <string name="offline_mode">Offline mode</string>
     <string name="not_applicable">N/A</string>
+    <string name="sync">Sync</string>
+    <string name="no_connection">No connection</string>
+    <string name="updating_data">Updating data</string>
 </resources>

@@ -226,6 +226,13 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
 
             toolbar.setTitle(currentInvoice.getInvoiceName());
         } else {
+            try (Realm realm = Realm.getDefaultInstance()) {
+                Invoice invoice1 = realm.where(Invoice.class).sort("Id", Sort.ASCENDING).findFirst();
+                if (invoice1 == null || invoice1.Id > -1)
+                    edit_invoice_number.setTag(-1);
+                else
+                    edit_invoice_number.setTag(invoice1.Id - 1);
+            }
             edit_invoice_date.setText(dateFormat.format(calendar.getTime()));
             toolbar.setTitle(getResources().getString(R.string.title_activity_new_invoice));
         }
@@ -248,13 +255,13 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         spinner_client = (Spinner) findViewById(R.id.spinner_client);
 
         edit_invoice_date.setOnClickListener(v -> {
-            String date = edit_invoice_date.getText().toString();
-            datePicker.show(getFragmentManager(), "invoice_date");
+            if (!datePicker.isAdded())
+                datePicker.show(getFragmentManager(), "invoice_date");
         });
 
         edit_invoice_due_date.setOnClickListener(v -> {
-            String date = edit_invoice_due_date.getText().toString();
-            datePicker.show(getFragmentManager(), "invoice_due_date");
+            if (!datePicker.isAdded())
+                datePicker.show(getFragmentManager(), "invoice_due_date");
         });
 
         edit_tax_rate.addTextChangedListener(new TextWatcher() {
@@ -405,6 +412,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                         } catch (NumberFormatException e) {
                         }
                         invoice.ClientId = array_list_clients.get(spinner_client.getSelectedItemPosition()).Id;
+                        invoice.ClientName = array_list_clients.get(spinner_client.getSelectedItemPosition()).Name;
                         invoice.ClientNote = edit_client_notes.getText().toString().trim();
                         invoice.IsPaid = switch_payment_received.isChecked();
 
@@ -424,9 +432,9 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                         }
 
                         if (invoiceDate != null)
-                            invoice.InvoiceDate = ((int) invoiceDate.getTime() / 1000);
+                            invoice.InvoiceDate = Integer.parseInt(invoiceDate.getTime() / 1000 + "");
                         if (invoiceDueDate != null)
-                            invoice.InvoiceDueDate = ((int) invoiceDueDate.getTime() / 1000);
+                            invoice.InvoiceDueDate = Integer.parseInt(invoiceDueDate.getTime() / 1000 + "");
                         invoice.pendingUpdate = true;
 
                         realm.executeTransaction(realm1 -> {
@@ -443,7 +451,6 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                                         }
                                     }
                                     if (!found) {
-                                        dbItem.pendingDelete = true;
                                         realm1.insertOrUpdate(dbItem);
                                     }
                                 }
@@ -608,8 +615,8 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
             // Make sure the request was successful
             if (resultCode == RESULT_OK) {
                 InvoiceItem item = (InvoiceItem) data.getSerializableExtra("data");
-                item.InvoiceId = currentInvoice.Id;
-                item.pendingUpdate = true;
+
+                item.InvoiceId = Long.valueOf(edit_invoice_number.getTag().toString());
 
                 Integer position = data.getIntExtra("position", -1);
 
@@ -619,7 +626,6 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                     existingItem.Description = item.Description;
                     existingItem.Rate = item.Rate;
                     existingItem.Quantity = item.Quantity;
-                    existingItem.pendingUpdate = true;
                 } else {
                     array_list_items.add(item);
                 }

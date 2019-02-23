@@ -8,6 +8,7 @@ import com.android.volley.RequestQueue;
 import com.android.volley.VolleyLog;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
+import com.bytecodr.invoicing.helper.helper_number;
 import com.bytecodr.invoicing.helper.helper_string;
 import com.bytecodr.invoicing.main.LoginActivity;
 import com.bytecodr.invoicing.main.MainActivity;
@@ -197,34 +198,37 @@ public class App extends Application {
 
                         try (Realm realm = Realm.getDefaultInstance()) {
                             realm.executeTransaction(realm1 -> realm1.where(Estimate.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
-                            realm.executeTransaction(realm1 -> realm1.where(EstimateItem.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
 
                             for (int i = 0; i < estimates.length(); i++) {
-                                JSONObject obj = estimates.getJSONObject(i);
+                                try {
+                                    JSONObject obj = estimates.getJSONObject(i);
 
-                                Estimate estimate = new Estimate();
+                                    Estimate estimate = new Estimate();
 
-                                estimate.Id = obj.optInt("id");
+                                    estimate.Id = obj.optInt("id");
 
-                                if (realm.where(Estimate.class).equalTo("Id", estimate.Id).count() > 0)
-                                    continue;
+                                    if (realm.where(Estimate.class).equalTo("Id", estimate.Id).count() > 0)
+                                        continue;
 
-                                estimate.UserId = obj.optInt("user_id");
+                                    estimate.UserId = obj.optInt("user_id");
 
-                                estimate.EstimateNumber = obj.getInt("estimate_number");
-                                estimate.ClientName = helper_string.optString(obj, "client_name");
-                                estimate.ClientId = obj.getInt("client_id");
-                                estimate.ClientNote = helper_string.optString(obj, "notes");
-                                estimate.EstimateDate = obj.optInt("estimate_date", 0);
-                                estimate.EstimateDueDate = obj.optInt("due_date", 0);
-                                estimate.TaxRate = obj.getDouble("tax_rate");
-                                estimate.TotalMoney = obj.getDouble("total");
-                                estimate.IsInvoiced = (obj.getInt("is_invoiced") == 1);
+                                    estimate.EstimateNumber = obj.getInt("estimate_number");
+                                    estimate.ClientName = helper_string.optString(obj, "client_name");
+                                    estimate.ClientId = obj.getInt("client_id");
+                                    estimate.ClientNote = helper_string.optString(obj, "notes");
+                                    estimate.EstimateDate = obj.optInt("estimate_date", 0);
+                                    estimate.EstimateDueDate = obj.optInt("due_date", 0);
+                                    estimate.TaxRate = helper_number.optDouble(obj, "tax_rate");
+                                    estimate.TotalMoney = helper_number.optDouble(obj, "total");
+                                    estimate.IsInvoiced = (obj.getInt("is_invoiced") == 1);
 
-                                estimate.Created = obj.optInt("created_on", 0);
-                                estimate.Updated = obj.optInt("updated_on", 0);
+                                    estimate.Created = obj.optInt("created_on", 0);
+                                    estimate.Updated = obj.optInt("updated_on", 0);
 
-                                realm.executeTransaction(realm12 -> realm12.insertOrUpdate(estimate));
+                                    realm.executeTransaction(realm12 -> realm12.insertOrUpdate(estimate));
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
                             }
 
                             for (int j = 0; j < estimate_lines.length(); j++) {
@@ -284,34 +288,38 @@ public class App extends Application {
                             realm.executeTransaction(realm1 -> realm1.where(Invoice.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
 
                             for (int i = 0; i < invoices.length(); i++) {
-                                JSONObject obj = invoices.getJSONObject(i);
+                                try {
+                                    JSONObject obj = invoices.getJSONObject(i);
 
-                                Invoice invoice = new Invoice();
+                                    Invoice invoice = new Invoice();
 
-                                invoice.Id = obj.optInt("id");
+                                    invoice.Id = obj.optInt("id");
 
-                                if (realm.where(Invoice.class).equalTo("Id", invoice.Id).count() > 0)
-                                    continue;
+                                    if (realm.where(Invoice.class).equalTo("Id", invoice.Id).count() > 0)
+                                        continue;
 
-                                invoice.UserId = obj.optInt("user_id");
+                                    invoice.UserId = obj.optInt("user_id");
 
-                                invoice.InvoiceNumber = obj.getInt("invoice_number");
-                                invoice.ClientName = helper_string.optString(obj, "client_name");
-                                invoice.ClientId = obj.getInt("client_id");
-                                invoice.ClientNote = helper_string.optString(obj, "notes");
-                                invoice.InvoiceDate = obj.optInt("invoice_date", 0);
-                                invoice.InvoiceDueDate = obj.optInt("due_date", 0);
-                                invoice.TaxRate = obj.getDouble("tax_rate");
-                                invoice.TotalMoney = obj.getDouble("total");
-                                invoice.IsPaid = (obj.getInt("is_paid") == 1);
+                                    invoice.InvoiceNumber = obj.getInt("invoice_number");
+                                    invoice.ClientName = helper_string.optString(obj, "client_name");
+                                    invoice.ClientId = obj.getInt("client_id");
+                                    invoice.ClientNote = helper_string.optString(obj, "notes");
+                                    invoice.InvoiceDate = obj.optInt("invoice_date", 0);
+                                    invoice.InvoiceDueDate = obj.optInt("due_date", 0);
+                                    invoice.TaxRate = helper_number.optDouble(obj, "tax_rate");
+                                    invoice.TotalMoney = helper_number.optDouble(obj, "total");
+                                    invoice.IsPaid = (obj.getInt("is_paid") == 1);
 
-                                invoice.Created = obj.optInt("created_on", 0);
-                                invoice.Updated = obj.optInt("updated_on", 0);
+                                    invoice.Created = obj.optInt("created_on", 0);
+                                    invoice.Updated = obj.optInt("updated_on", 0);
 
-                                if (invoice.InvoiceDate >= monthStartDate && invoice.InvoiceDate <= monthEndDate && !invoice.IsPaid)
-                                    unpaid_total += invoice.TotalMoney;
+                                    if (invoice.InvoiceDate >= monthStartDate && invoice.InvoiceDate <= monthEndDate && !invoice.IsPaid)
+                                        unpaid_total += invoice.TotalMoney;
 
-                                realm.executeTransaction(realm12 -> realm12.insertOrUpdate(invoice));
+                                    realm.executeTransaction(realm12 -> realm12.insertOrUpdate(invoice));
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
                             }
 
                             for (int j = 0; j < invoice_lines.length(); j++) {
@@ -454,8 +462,7 @@ public class App extends Application {
                                 }
                                 updateData();
                                 pendingClients.remove(client.Id);
-                            }, error -> {
-                            }) {
+                            }, error -> pendingClients.remove(client.Id)) {
 
                         @Override
                         public Map<String, String> getHeaders() {
@@ -487,8 +494,7 @@ public class App extends Application {
                                 }
                                 updateData();
                                 pendingClients.remove(client.Id);
-                            }, error -> {
-                            }) {
+                            }, error -> pendingClients.remove(client.Id)) {
 
                         @Override
                         public Map<String, String> getHeaders() {
@@ -527,8 +533,7 @@ public class App extends Application {
                                 }
                                 updateData();
                                 pendingItems.remove(item.Id);
-                            }, error -> {
-                            }) {
+                            }, error -> pendingItems.remove(item.Id)) {
 
                         @Override
                         public Map<String, String> getHeaders() {
@@ -560,8 +565,7 @@ public class App extends Application {
                                 }
                                 updateData();
                                 pendingItems.remove(item.Id);
-                            }, error -> {
-                            }) {
+                            }, error -> pendingItems.remove(item.Id)) {
 
                         @Override
                         public Map<String, String> getHeaders() {
@@ -600,6 +604,7 @@ public class App extends Application {
 
                     @Override
                     public void onFailure(Call<JsonObject> call, Throwable t) {
+                        pendingDescriptions.remove(description.id);
                     }
                 });
             }
@@ -629,7 +634,7 @@ public class App extends Application {
 
                     @Override
                     public void onFailure(Call<JsonObject> call, Throwable t) {
-
+                        pendingDescriptions.remove(description.id);
                     }
                 });
             }
@@ -663,12 +668,14 @@ public class App extends Application {
                     addToRequestQueue(new JsonObjectRequest
                             (Request.Method.POST, Network.API_URL + "estimates/create", api_parameter, response -> {
                                 try (Realm realm1 = Realm.getDefaultInstance()) {
-                                    realm1.executeTransaction(realm2 -> realm2.where(Estimate.class).equalTo("Id", estimate.Id).findAll().deleteAllFromRealm());
+                                    realm1.executeTransaction(realm2 -> {
+                                        realm2.where(Estimate.class).equalTo("Id", estimate.Id).findAll().deleteAllFromRealm();
+                                        realm2.where(EstimateItem.class).equalTo("EstimateId", estimate.Id).findAll().deleteAllFromRealm();
+                                    });
                                 }
                                 updateData();
                                 pendingEstimates.remove(estimate.Id);
-                            }, error -> {
-                            }) {
+                            }, error -> pendingEstimates.remove(estimate.Id)) {
                         @Override
                         public Map<String, String> getHeaders() {
                             Map<String, String> params = new HashMap<>();
@@ -696,12 +703,14 @@ public class App extends Application {
                             (Request.Method.POST, Network.API_URL + "estimates/delete", api_parameter, response -> {
 
                                 try (Realm realm1 = Realm.getDefaultInstance()) {
-                                    realm1.executeTransaction(realm2 -> realm2.where(Estimate.class).equalTo("Id", estimate.Id).findAll().deleteAllFromRealm());
+                                    realm1.executeTransaction(realm2 -> {
+                                        realm2.where(Estimate.class).equalTo("Id", estimate.Id).findAll().deleteAllFromRealm();
+                                        realm2.where(EstimateItem.class).equalTo("EstimateId", estimate.Id).findAll().deleteAllFromRealm();
+                                    });
                                 }
                                 updateData();
                                 pendingEstimates.remove(estimate.Id);
-                            }, error -> {
-                            }) {
+                            }, error -> pendingEstimates.remove(estimate.Id)) {
 
                         @Override
                         public Map<String, String> getHeaders() {
@@ -745,12 +754,14 @@ public class App extends Application {
                     addToRequestQueue(new JsonObjectRequest
                             (Request.Method.POST, Network.API_URL + "invoices/create", api_parameter, response -> {
                                 try (Realm realm1 = Realm.getDefaultInstance()) {
-                                    realm1.executeTransaction(realm2 -> realm2.where(Invoice.class).equalTo("Id", invoice.Id).findAll().deleteAllFromRealm());
+                                    realm1.executeTransaction(realm2 -> {
+                                        realm2.where(Invoice.class).equalTo("Id", invoice.Id).findAll().deleteAllFromRealm();
+                                        realm2.where(InvoiceItem.class).equalTo("InvoiceId", invoice.Id).findAll().deleteAllFromRealm();
+                                    });
                                 }
                                 updateData();
                                 pendingInvoices.remove(invoice.Id);
-                            }, error -> {
-                            }) {
+                            }, error -> pendingEstimates.remove(invoice.Id)) {
                         @Override
                         public Map<String, String> getHeaders() {
                             Map<String, String> params = new HashMap<>();
@@ -778,12 +789,14 @@ public class App extends Application {
                             (Request.Method.POST, Network.API_URL + "invoices/delete", api_parameter, response -> {
 
                                 try (Realm realm1 = Realm.getDefaultInstance()) {
-                                    realm1.executeTransaction(realm2 -> realm2.where(Invoice.class).equalTo("Id", invoice.Id).findAll().deleteAllFromRealm());
+                                    realm1.executeTransaction(realm2 -> {
+                                        realm2.where(Invoice.class).equalTo("Id", invoice.Id).findAll().deleteAllFromRealm();
+                                        realm2.where(InvoiceItem.class).equalTo("InvoiceId", invoice.Id).findAll().deleteAllFromRealm();
+                                    });
                                 }
                                 updateData();
                                 pendingInvoices.remove(invoice.Id);
-                            }, error -> {
-                            }) {
+                            }, error -> pendingEstimates.remove(invoice.Id)) {
 
                         @Override
                         public Map<String, String> getHeaders() {

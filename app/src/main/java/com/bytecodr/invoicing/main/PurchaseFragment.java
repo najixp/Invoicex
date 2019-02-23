@@ -105,7 +105,7 @@ public class PurchaseFragment extends Fragment
     public void updateViews() {
         try (Realm realm = Realm.getDefaultInstance()) {
             array_list.clear();
-            array_list.addAll(realm.copyFromRealm(realm.where(Estimate.class).findAll()));
+            array_list.addAll(realm.copyFromRealm(realm.where(Estimate.class).equalTo("pendingDelete", false).findAll()));
             adapter.notifyDataSetChanged();
         } catch (Exception e) {
 

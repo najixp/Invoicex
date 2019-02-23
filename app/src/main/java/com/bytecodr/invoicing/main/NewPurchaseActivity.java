@@ -208,6 +208,13 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
             toolbar.setTitle(currentEstimate.getPurchaseName());
         } else {
+            try (Realm realm = Realm.getDefaultInstance()) {
+                Estimate estimate1 = realm.where(Estimate.class).sort("Id", Sort.ASCENDING).findFirst();
+                if (estimate1 == null || estimate1.Id > -1)
+                    edit_purchase_number.setTag(-1);
+                else
+                    edit_purchase_number.setTag(estimate1.Id - 1);
+            }
             edit_purchase_date.setText(dateFormat.format(calendar.getTime()));
             toolbar.setTitle(getResources().getString(R.string.title_activity_new_purchase));
         }
@@ -230,13 +237,13 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         spinner_client = (Spinner) findViewById(R.id.spinner_client);
 
         edit_purchase_date.setOnClickListener(v -> {
-            String date = edit_purchase_date.getText().toString();
-            datePicker.show(getFragmentManager(), "estimate_date");
+            if (!datePicker.isAdded())
+                datePicker.show(getFragmentManager(), "estimate_date");
         });
 
         edit_purchase_due_date.setOnClickListener(v -> {
-            String date = edit_purchase_due_date.getText().toString();
-            datePicker.show(getFragmentManager(), "estimate_due_date");
+            if (!datePicker.isAdded())
+                datePicker.show(getFragmentManager(), "estimate_due_date");
         });
 
         edit_tax_rate.addTextChangedListener(new TextWatcher() {
@@ -372,15 +379,8 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                     try (Realm realm = Realm.getDefaultInstance()) {
                         Estimate estimate = new Estimate();
 
-                        String Id = edit_purchase_number.getTag().toString();
-                        if (Id.equals("0")) {
-                            Estimate estimate1 = realm.where(Estimate.class).sort("Id", Sort.ASCENDING).findFirst();
-                            if (estimate1 == null || estimate1.Id > -1)
-                                estimate.Id = -1;
-                            else
-                                estimate.Id = estimate1.Id - 1;
-                        } else
-                            estimate.Id = Long.valueOf(Id);
+                        estimate.Id = Long.valueOf(edit_purchase_number.getTag().toString());
+
                         try {
                             estimate.EstimateNumber = Long.valueOf(edit_purchase_number.getText().toString().trim());
                         } catch (NumberFormatException e) {
@@ -390,6 +390,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                         } catch (NumberFormatException e) {
                         }
                         estimate.ClientId = array_list_clients.get(spinner_client.getSelectedItemPosition()).Id;
+                        estimate.ClientName = array_list_clients.get(spinner_client.getSelectedItemPosition()).Name;
                         estimate.ClientNote = edit_client_notes.getText().toString().trim();
 
                         String estimateDateString = edit_purchase_date.getText().toString().trim();
@@ -404,9 +405,9 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                         } catch (ParseException e) {
                         }
                         if (estimateDate != null)
-                            estimate.EstimateDate = ((int) estimateDate.getTime() / 1000);
+                            estimate.EstimateDate = Integer.parseInt(estimateDate.getTime() / 1000 + "");
                         if (estimateDueDate != null)
-                            estimate.EstimateDueDate = ((int) estimateDueDate.getTime() / 1000);
+                            estimate.EstimateDueDate = Integer.parseInt(estimateDueDate.getTime() / 1000 + "");
                         estimate.pendingUpdate = true;
 
                         realm.executeTransaction(realm1 -> {
@@ -423,7 +424,6 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                                         }
                                     }
                                     if (!found) {
-                                        dbItem.pendingDelete = true;
                                         realm1.insertOrUpdate(dbItem);
                                     }
                                 }
@@ -571,8 +571,8 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             // Make sure the request was successful
             if (resultCode == RESULT_OK) {
                 EstimateItem item = (EstimateItem) data.getSerializableExtra("data");
-                item.EstimateId = currentEstimate.Id;
-                item.pendingUpdate = true;
+
+                item.EstimateId = Long.valueOf(edit_purchase_number.getTag().toString());
 
                 Integer position = data.getIntExtra("position", -1);
 
@@ -582,7 +582,6 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                     existingItem.Description = item.Description;
                     existingItem.Rate = item.Rate;
                     existingItem.Quantity = item.Quantity;
-                    existingItem.pendingUpdate = true;
                 } else {
                     array_list_items.add(item);
                 }

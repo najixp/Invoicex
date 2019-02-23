@@ -1,5 +1,7 @@
 package com.bytecodr.invoicing.helper;
 
+import org.json.JSONObject;
+
 import java.math.RoundingMode;
 import java.text.DateFormatSymbols;
 import java.text.DecimalFormat;
@@ -24,5 +26,13 @@ public class helper_number
     public static Date unixToDate(int timeStamp)
     {
         return new Date(timeStamp * 1000L);
+    }
+
+    public static double optDouble(JSONObject json, String key) {
+        // http://code.google.com/p/android/issues/detail?id=13830
+        if (json.isNull(key))
+            return 0;
+        else
+            return json.optDouble(key);
     }
 }

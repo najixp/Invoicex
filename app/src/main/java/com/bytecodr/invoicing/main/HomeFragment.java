@@ -9,8 +9,10 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.bytecodr.invoicing.App;
+import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.DoublePreference;
 
@@ -21,8 +23,7 @@ import io.realm.Realm;
  * Use the {@link HomeFragment#newInstance} factory method to
  * create an instance of this fragment.
  */
-public class HomeFragment extends Fragment
-{
+public class HomeFragment extends Fragment {
 
     //private TextView text_paid;
     private TextView text_unpaid;
@@ -31,8 +32,7 @@ public class HomeFragment extends Fragment
 
     //private BarChart chart;
 
-    public HomeFragment()
-    {
+    public HomeFragment() {
         // Required empty public constructor
     }
 
@@ -43,15 +43,13 @@ public class HomeFragment extends Fragment
      * @return A new instance of fragment HomeFragment.
      */
     // TODO: Rename and change types and number of parameters
-    public static HomeFragment newInstance(String param1, String param2)
-    {
+    public static HomeFragment newInstance(String param1, String param2) {
         HomeFragment fragment = new HomeFragment();
         return fragment;
     }
 
     @Override
-    public void onCreate(Bundle savedInstanceState)
-    {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
 
@@ -61,12 +59,21 @@ public class HomeFragment extends Fragment
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState)
-    {
+                             Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_home, container, false);
 
         //text_paid = (TextView) view.findViewById(R.id.text_paid);
-        text_unpaid    = (TextView) view.findViewById(R.id.text_unpaid);
+        text_unpaid = (TextView) view.findViewById(R.id.text_unpaid);
+        view.findViewById(R.id.syncButton).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (CommonUtilities.isOnline(getContext())) {
+                    App.getInstance().updateData();
+                    Toast.makeText(getContext(), R.string.updating_data, Toast.LENGTH_LONG).show();
+                } else
+                    Toast.makeText(getContext(), R.string.no_connection, Toast.LENGTH_LONG).show();
+            }
+        });
 
 //        chart = (BarChart) view.findViewById(R.id.chart);
 //        chart.getLegend().setEnabled(false);
@@ -88,8 +95,7 @@ public class HomeFragment extends Fragment
         super.onResume();
 
         //Checks to make sure fragment is still attached to activity
-        if (isAdded())
-        {
+        if (isAdded()) {
             ((AppCompatActivity) getActivity()).getSupportActionBar().setTitle(R.string.title_activity_home);
             NavigationView navigationView = (NavigationView) getActivity().findViewById(R.id.nav_view);
             navigationView.setCheckedItem(R.id.nav_home);
@@ -98,8 +104,7 @@ public class HomeFragment extends Fragment
         App.getInstance().updateData();
     }
 
-    public void updateViews()
-    {
+    public void updateViews() {
         try (Realm realm = Realm.getDefaultInstance()) {
             DoublePreference unPaidTotalPreference = realm.where(DoublePreference.class).equalTo("name", "unpaidTotal").findFirst();
             if (unPaidTotalPreference != null)
