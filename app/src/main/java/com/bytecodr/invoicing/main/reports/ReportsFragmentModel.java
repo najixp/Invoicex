@@ -22,7 +22,7 @@ class ReportsFragmentModel {
     }
 
     void getReport(int userId) {
-        App.getApis().getReport(App.SERVER_KEY_HASH, userId).enqueue(new Callback<JsonObject>() {
+        App.getInstance().api.getReport(App.SERVER_KEY_HASH, userId).enqueue(new Callback<JsonObject>() {
             @Override
             public void onResponse(Call<JsonObject> call, Response<JsonObject> response) {
                 if (response.isSuccessful()) {

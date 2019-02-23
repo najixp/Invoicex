@@ -30,6 +30,9 @@ public class Invoice extends RealmObject implements Serializable {
     public double TaxRate;
     public double TotalMoney;
 
+    public boolean pendingUpdate = false;
+    public boolean pendingDelete = false;
+
     public String getInvoiceName()
     {
         return "INV-" + getInvoiceNumberFormatted();

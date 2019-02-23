@@ -32,22 +32,15 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.NetworkResponse;
-import com.android.volley.Request;
-import com.android.volley.VolleyLog;
-import com.android.volley.toolbox.JsonObjectRequest;
 import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.BuildConfig;
 import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.helper.helper_number;
-import com.bytecodr.invoicing.helper.helper_string;
 import com.bytecodr.invoicing.model.Client;
 import com.bytecodr.invoicing.model.Estimate;
-import com.bytecodr.invoicing.model.Invoice;
-import com.bytecodr.invoicing.model.Item;
-import com.bytecodr.invoicing.network.Network;
-import com.google.gson.Gson;
+import com.bytecodr.invoicing.model.EstimateItem;
+import com.bytecodr.invoicing.model.StringPreference;
 import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
@@ -66,10 +59,6 @@ import com.rey.material.widget.Spinner;
 import com.rey.material.widget.Switch;
 import com.wdullaer.materialdatetimepicker.date.DatePickerDialog;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -78,8 +67,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
+
+import io.realm.Realm;
+import io.realm.Sort;
 
 import static com.bytecodr.invoicing.main.LoginActivity.SESSION_USER;
 import static com.itextpdf.text.pdf.ColumnText.AR_LIG;
@@ -94,14 +85,10 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
     private static final int SIZE_TEXT_TOTAL = 14;
     private static final int SIZE_TEXT_NORMAL = 14;
 
-    private MaterialDialog progressDialog;
-    private JSONObject api_parameter;
-
     private Estimate currentEstimate;
     private Client currentClient;
 
     private ArrayList<Client> array_list_clients;
-    private String[] array_clients;
     Spinner spinner_client;
 
     private EditText edit_purchase_number;
@@ -118,7 +105,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
     private Switch switch_payment_received;
 
-    private ArrayList<Item> array_list_items;
+    private ArrayList<EstimateItem> array_list_items;
     private EstimateItemAdapter adapter_item;
     private ListView list_items;
 
@@ -132,8 +119,9 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             Manifest.permission.WRITE_EXTERNAL_STORAGE
     };
 
-    /** INVOICE SETUP **/
-    private String logoImage;
+    /**
+     * INVOICE SETUP
+     **/
     private BaseFont bfBold;
     private BaseFont bf;
     private int pageNumber = 0;
@@ -156,8 +144,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
     }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState)
-    {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_new_purchase);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
@@ -165,8 +152,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         SharedPreferences settings = getSharedPreferences(SESSION_USER, MODE_PRIVATE);
 
         //Means user is not logged in
-        if (settings == null || settings.getInt("logged_in", 0) == 0 || settings.getString("api_key", "").equals(""))
-        {
+        if (settings == null || settings.getInt("logged_in", 0) == 0 || settings.getString("api_key", "").equals("")) {
             Intent intent = new Intent(this, LoginActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
@@ -178,27 +164,21 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
         currency = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
 
-        progressDialog = new MaterialDialog.Builder(this)
-                .title(R.string.progress_dialog)
-                .content(R.string.please_wait)
-                .cancelable(false)
-                .progress(true, 0).build();
+        edit_purchase_number = (EditText) findViewById(R.id.edit_purchase_number);
+        edit_tax_rate = (EditText) findViewById(R.id.edit_tax_rate);
+        edit_client_notes = (EditText) findViewById(R.id.edit_client_notes);
+        edit_purchase_date = (EditText) findViewById(R.id.edit_purchase_date);
+        edit_purchase_due_date = (EditText) findViewById(R.id.edit_purchase_due_date);
 
-        edit_purchase_number = (EditText)findViewById(R.id.edit_purchase_number);
-        edit_tax_rate = (EditText)findViewById(R.id.edit_tax_rate);
-        edit_client_notes = (EditText)findViewById(R.id.edit_client_notes);
-        edit_purchase_date = (EditText)findViewById(R.id.edit_purchase_date);
-        edit_purchase_due_date = (EditText)findViewById(R.id.edit_purchase_due_date);
-
-        text_subtotal_amount = (TextView)findViewById(R.id.text_subtotal_amount);
-        text_tax_amount = (TextView)findViewById(R.id.text_tax_amount);
-        text_total_amount = (TextView)findViewById(R.id.text_total_amount);
+        text_subtotal_amount = (TextView) findViewById(R.id.text_subtotal_amount);
+        text_tax_amount = (TextView) findViewById(R.id.text_tax_amount);
+        text_total_amount = (TextView) findViewById(R.id.text_total_amount);
 
         text_subtotal_amount.setText(currency + helper_number.round(0));
         text_tax_amount.setText(currency + helper_number.round(0));
         text_total_amount.setText(currency + helper_number.round(0));
 
-        switch_payment_received = (Switch)findViewById(R.id.switch_payment_received);
+        switch_payment_received = (Switch) findViewById(R.id.switch_payment_received);
 
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd. MMM yyyy");
         Calendar calendar = Calendar.getInstance();
@@ -212,23 +192,22 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
         datePicker.vibrate(false);
 
-        currentEstimate = (Estimate)getIntent().getSerializableExtra("data");
+        currentEstimate = (Estimate) getIntent().getSerializableExtra("data");
         currentClient = new Client();
 
-        if (currentEstimate != null && currentEstimate.Id > 0)
-        {
+        if (currentEstimate != null && currentEstimate.Id > 0) {
             edit_purchase_number.setTag(currentEstimate.Id);
             edit_purchase_number.setText(currentEstimate.getEstimateNumberFormatted());
             edit_tax_rate.setText(String.format("%.2f", currentEstimate.TaxRate));
             edit_client_notes.setText(currentEstimate.ClientNote);
 
-            if (currentEstimate.EstimateDate != 0) edit_purchase_date.setText(dateFormat.format(currentEstimate.getEstimateDate()));
-            if (currentEstimate.EstimateDueDate != 0) edit_purchase_due_date.setText(dateFormat.format(currentEstimate.getEstimateDueDate()));
+            if (currentEstimate.EstimateDate != 0)
+                edit_purchase_date.setText(dateFormat.format(currentEstimate.getEstimateDate()));
+            if (currentEstimate.EstimateDueDate != 0)
+                edit_purchase_due_date.setText(dateFormat.format(currentEstimate.getEstimateDueDate()));
 
             toolbar.setTitle(currentEstimate.getPurchaseName());
-        }
-        else
-        {
+        } else {
             edit_purchase_date.setText(dateFormat.format(calendar.getTime()));
             toolbar.setTitle(getResources().getString(R.string.title_activity_new_purchase));
         }
@@ -241,8 +220,8 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         list_items.setAdapter(adapter_item);
         list_items.setOnItemClickListener((arg0, arg1, position, arg3) -> {
 
-            Item item = array_list_items.get(position);
-            Intent intent = new Intent(NewPurchaseActivity.this, ItemPickerActivity.class);
+            EstimateItem item = array_list_items.get(position);
+            Intent intent = new Intent(NewPurchaseActivity.this, EstimateItemPickerActivity.class);
             intent.putExtra("data", item);
             intent.putExtra("position", position);
             startActivityForResult(intent, ITEM_PICKER_TAG);
@@ -260,24 +239,24 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             datePicker.show(getFragmentManager(), "estimate_due_date");
         });
 
-        edit_tax_rate.addTextChangedListener(new TextWatcher()
-        {
+        edit_tax_rate.addTextChangedListener(new TextWatcher() {
             @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {   }
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
 
             @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count)  {    }
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
 
             @Override
-            public void afterTextChanged(Editable s)
-            {
+            public void afterTextChanged(Editable s) {
                 calculate_total();
             }
         });
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.add_item_button);
         fab.setOnClickListener(view -> {
-            Intent intent = new Intent(NewPurchaseActivity.this, ItemPickerActivity.class);
+            Intent intent = new Intent(NewPurchaseActivity.this, EstimateItemPickerActivity.class);
             startActivityForResult(intent, ITEM_PICKER_TAG);
         });
 
@@ -304,30 +283,40 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         AdRequest adRequest = new AdRequest.Builder().build();
         mAdView.loadAd(adRequest);*/
 
-        api_parameter = new JSONObject();
-
-        try
-        {
-            api_parameter.put("user_id", settings.getInt("id", 0));
-            api_parameter.put("include_logo", 1);
-
-            if (currentEstimate != null && currentEstimate.Id > 0)
-            {
-                api_parameter.put("include_estimate_lines", currentEstimate.Id);
-            }
-            else
-            {
-                api_parameter.put("include_estimate_number", 1);
-            }
-        }
-        catch(JSONException ex) {}
-
         setSupportActionBar(toolbar);
 
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setHomeButtonEnabled(true);
 
-        RunGetClientService();
+        try (Realm realm = Realm.getDefaultInstance()) {
+            List<Client> clients = realm.copyFromRealm(realm.where(Client.class).equalTo("pendingDelete", false).greaterThan("Id", 0).findAll());
+
+            array_list_clients.clear();
+            List<String> array_clients = new ArrayList<>();
+
+            Integer selected_client_index = 0;
+
+            for (int i = 0; i < clients.size(); i++) {
+                Client client = clients.get(i);
+                array_list_clients.add(client);
+                array_clients.add(client.Name);
+
+                if (currentEstimate != null && currentEstimate.Id > 0 && currentEstimate.ClientId == client.Id) {
+                    selected_client_index = i;
+                    currentClient = client;
+                }
+            }
+
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(NewPurchaseActivity.this, R.layout.custom_simple_spinner_item, array_clients);
+            spinner_client.setAdapter(adapter);
+            spinner_client.setSelection(selected_client_index);
+
+            if (currentEstimate != null)
+                array_list_items.addAll(realm.copyFromRealm(realm.where(EstimateItem.class).equalTo("EstimateId", currentEstimate.Id).findAll()));
+
+            calculate_total();
+            setListViewHeightBasedOnChildren(list_items);
+        }
 
         if (currentEstimate == null) {
             final SharedPreferences preference = getSharedPreferences(SESSION_USER, MODE_PRIVATE);
@@ -337,17 +326,14 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu)
-    {
+    public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_new_purchase, menu);
 
-        if (currentEstimate != null)
-        {
+        if (currentEstimate != null) {
             MenuItem item = menu.findItem(R.id.action_delete);
             FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.printOut);
-            if (item != null)
-            {
+            if (item != null) {
                 item.setVisible(true);
             }
 
@@ -358,15 +344,13 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             }*/
 
             item = menu.findItem(R.id.action_download);
-            if (item != null)
-            {
+            if (item != null) {
                 item.setVisible(true);
                 findViewById(R.id.printOut).setVisibility(View.VISIBLE);
             }
 
             item = menu.findItem(R.id.action_email);
-            if (item != null)
-            {
+            if (item != null) {
                 item.setVisible(true);
             }
         }
@@ -375,38 +359,38 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item)
-    {
+    public boolean onOptionsItemSelected(MenuItem item) {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_save)
-        {
-            if (isFormValid())
-            {
-                SharedPreferences settings = getSharedPreferences(SESSION_USER, MODE_PRIVATE);
+        if (id == R.id.action_save) {
+            if (isFormValid()) {
+                if (isEstimateFormValid()) {
+                    try (Realm realm = Realm.getDefaultInstance()) {
+                        Estimate estimate = new Estimate();
 
-                try
-                {
-                    if (isEstimateFormValid())
-                    {
-                        api_parameter = new JSONObject();
-                        api_parameter.put("user_id", settings.getInt("id", 0));
-
-                        Object itemId = edit_purchase_number.getTag();
-
-                        if (!itemId.equals("0"))
-                        {
-                            api_parameter.put("id", itemId.toString());
+                        String Id = edit_purchase_number.getTag().toString();
+                        if (Id.equals("0")) {
+                            Estimate estimate1 = realm.where(Estimate.class).sort("Id", Sort.ASCENDING).findFirst();
+                            if (estimate1 == null || estimate1.Id > -1)
+                                estimate.Id = -1;
+                            else
+                                estimate.Id = estimate1.Id - 1;
+                        } else
+                            estimate.Id = Long.valueOf(Id);
+                        try {
+                            estimate.EstimateNumber = Long.valueOf(edit_purchase_number.getText().toString().trim());
+                        } catch (NumberFormatException e) {
                         }
-
-                        api_parameter.put("estimate_number", edit_purchase_number.getText().toString().trim());
-                        api_parameter.put("tax_rate", edit_tax_rate.getText().toString().trim());
-                        api_parameter.put("client_id", array_list_clients.get(spinner_client.getSelectedItemPosition()).Id);
-                        api_parameter.put("notes", edit_client_notes.getText().toString().trim());
+                        try {
+                            estimate.TaxRate = Double.valueOf(edit_tax_rate.getText().toString().trim());
+                        } catch (NumberFormatException e) {
+                        }
+                        estimate.ClientId = array_list_clients.get(spinner_client.getSelectedItemPosition()).Id;
+                        estimate.ClientNote = edit_client_notes.getText().toString().trim();
 
                         String estimateDateString = edit_purchase_date.getText().toString().trim();
                         String estimateDueDateString = edit_purchase_due_date.getText().toString().trim();
@@ -414,58 +398,65 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                         SimpleDateFormat sdf = new SimpleDateFormat("dd. MMM yyyy");
                         Date estimateDate = null;
                         Date estimateDueDate = null;
-
-                        try
-                        {
+                        try {
                             estimateDate = sdf.parse(estimateDateString);
                             estimateDueDate = sdf.parse(estimateDueDateString);
-
+                        } catch (ParseException e) {
                         }
-                        catch (ParseException e)  {  }
+                        if (estimateDate != null)
+                            estimate.EstimateDate = ((int) estimateDate.getTime() / 1000);
+                        if (estimateDueDate != null)
+                            estimate.EstimateDueDate = ((int) estimateDueDate.getTime() / 1000);
+                        estimate.pendingUpdate = true;
 
-                        api_parameter.put("estimate_date", (estimateDate != null ? (estimateDate.getTime() / 1000) : null));
-                        api_parameter.put("due_date", (estimateDueDate != null ? (estimateDueDate.getTime() / 1000) : null));
+                        realm.executeTransaction(realm1 -> {
+                            realm1.insertOrUpdate(estimate);
+                            if (currentEstimate != null) {
+                                List<EstimateItem> dbItems = realm1.where(EstimateItem.class).equalTo("EstimateId", currentEstimate.Id).findAll();
+                                for (EstimateItem dbItem : dbItems) {
+                                    boolean found = false;
+                                    for (EstimateItem listItem : array_list_items) {
+                                        if (listItem.Id == dbItem.Id) {
+                                            realm1.insertOrUpdate(listItem);
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!found) {
+                                        dbItem.pendingDelete = true;
+                                        realm1.insertOrUpdate(dbItem);
+                                    }
+                                }
+                                for (EstimateItem listItem : array_list_items) {
+                                    boolean found = false;
+                                    for (EstimateItem dbItem : dbItems) {
+                                        if (listItem.Id == dbItem.Id) {
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!found)
+                                        realm1.insertOrUpdate(listItem);
+                                }
+                            } else
+                                realm1.insertOrUpdate(array_list_items);
+                        });
 
-                        Gson json = new Gson();
+                        App.getInstance().updateData();
 
-                        api_parameter.put("items", json.toJson(array_list_items));
-
-                        RunCreateEstimateService();
+                        Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        intent.putExtra("tab", "purchases");
+                        startActivity(intent);
+                        finish();
                     }
-                }
-                catch (JSONException ex)
-                {
-                    Toast.makeText(NewPurchaseActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
                 }
 
                 return true;
-            }
-            else
-            {
+            } else {
                 return false;
             }
-        }
-        if (id == R.id.action_convert_to_invoice)
-        {
-            SharedPreferences settings = getSharedPreferences(SESSION_USER, MODE_PRIVATE);
-            try
-            {
-                api_parameter = new JSONObject();
-                api_parameter.put("user_id", settings.getInt("id", 0));
-                Object itemId = edit_purchase_number.getTag();
-
-                if (!itemId.equals("0"))
-                {
-                    api_parameter.put("id", itemId.toString());
-                }
-
-                RunUpdateEstimateAsInvoicedService();
-            }
-            catch(JSONException ex) {}
-
-        }
-        else if (id == R.id.action_delete)
-        {
+        } else if (id == R.id.action_delete) {
             new MaterialDialog.Builder(this)
                     .title(R.string.delete)
                     .content(R.string.delete_item)
@@ -474,50 +465,45 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                     .cancelable(false)
                     .negativeColorRes(R.color.colorAccent)
                     .positiveColorRes(R.color.colorAccent)
-                    .callback(new MaterialDialog.ButtonCallback()
-                    {
+                    .callback(new MaterialDialog.ButtonCallback() {
                         @Override
-                        public void onPositive(MaterialDialog dialog)
-                        {
+                        public void onPositive(MaterialDialog dialog) {
                             //Delete
-                            SharedPreferences settings = getSharedPreferences(SESSION_USER, MODE_PRIVATE);
-
                             Object id = edit_purchase_number.getTag();
 
-                            if (!id.equals("0"))
-                            {
-                                try
-                                {
-                                    api_parameter = new JSONObject();
-                                    api_parameter.put("id", id.toString());
-                                    api_parameter.put("user_id", settings.getInt("id", 0));
+                            if (!id.equals("0")) {
+                                try (Realm realm = Realm.getDefaultInstance()) {
+                                    Estimate estimate = realm.where(Estimate.class).equalTo("Id", Long.valueOf(id.toString())).findFirst();
+                                    if (estimate != null) {
+                                        realm.executeTransaction(realm1 -> {
+                                            estimate.pendingDelete = true;
+                                            realm1.insertOrUpdate(estimate);
+                                        });
+                                        App.getInstance().updateData();
+                                    }
 
-                                    RunDeleteEstimateService();
-                                }
-                                catch (JSONException ex)
-                                {
-                                    Toast.makeText(NewPurchaseActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
+                                    Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    intent.putExtra("tab", "purchases");
+                                    startActivity(intent);
+                                    finish();
                                 }
                             }
                         }
 
                         @Override
-                        public void onNegative(MaterialDialog dialog)
-                        {
+                        public void onNegative(MaterialDialog dialog) {
                             //Cancel
                             dialog.dismiss();
 
-                            if (dialog != null && dialog.isShowing())
-                            {
+                            if (dialog != null && dialog.isShowing()) {
                                 // If the response is JSONObject instead of expected JSONArray
                                 dialog.dismiss();
                             }
                         }
                     })
                     .show();
-        }
-        else if (id == R.id.action_download)
-        {
+        } else if (id == R.id.action_download) {
             final String path = downloadPDF();
 
             if (path.length() == 0) {
@@ -529,9 +515,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 startActivity(intent);
             }
-        }
-        else if (id == R.id.action_email)
-        {
+        } else if (id == R.id.action_email) {
             String path = downloadPDF();
 
             SharedPreferences settings = getSharedPreferences(SESSION_USER, MODE_PRIVATE);
@@ -540,14 +524,13 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             emailIntent.putExtra(Intent.EXTRA_EMAIL, new String[]{currentClient.Email});
 
             emailIntent.putExtra(Intent.EXTRA_SUBJECT, String.format(getResources().getString(R.string.estimate_email_subject), currentEstimate.getEstimateNumberFormatted(), settings.getString("firstname", ""), settings.getString("lastname", "")));
-            emailIntent.putExtra(Intent.EXTRA_TEXT, String.format(getResources().getString(R.string.estimate_email_text), currentClient.Name,  currentEstimate.getPurchaseName(), settings.getString("firstname", ""), settings.getString("lastname", "")));
+            emailIntent.putExtra(Intent.EXTRA_TEXT, String.format(getResources().getString(R.string.estimate_email_text), currentClient.Name, currentEstimate.getPurchaseName(), settings.getString("firstname", ""), settings.getString("lastname", "")));
 
             emailIntent.setType("text/plain");
-            Uri uri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".provider",  new File(path));
+            Uri uri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".provider", new File(path));
             emailIntent.putExtra(Intent.EXTRA_STREAM, uri);
             startActivity(Intent.createChooser(emailIntent, "Send Email"));
-        }
-        else if (id == android.R.id.home) //Handles the back button, to make sure clients fragment is preselected
+        } else if (id == android.R.id.home) //Handles the back button, to make sure clients fragment is preselected
         {
             Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -559,25 +542,21 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         return super.onOptionsItemSelected(item);
     }
 
-    public boolean isEstimateFormValid()
-    {
+    public boolean isEstimateFormValid() {
         boolean isValid = true;
 
-        if (edit_purchase_number.getText().toString().trim().length() == 0){
+        if (edit_purchase_number.getText().toString().trim().length() == 0) {
             edit_purchase_number.setError(getResources().getString(R.string.estimate_number_required));
             isValid = false;
-        }
-        else
+        } else
             edit_purchase_number.setError(null);
 
-        if (spinner_client.getSelectedItemPosition() == -1 || array_list_clients.size() == 0)
-        {
+        if (spinner_client.getSelectedItemPosition() == -1 || array_list_clients.size() == 0) {
             Toast.makeText(NewPurchaseActivity.this, getResources().getString(R.string.client_required), Toast.LENGTH_LONG).show();
             isValid = false;
         }
 
-        if (array_list_items.size() == 0)
-        {
+        if (array_list_items.size() == 0) {
             Toast.makeText(NewPurchaseActivity.this, getResources().getString(R.string.items_required), Toast.LENGTH_LONG).show();
             isValid = false;
         }
@@ -586,26 +565,25 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data)
-    {
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         // Check which request we're responding to
         if (requestCode == ITEM_PICKER_TAG) {
             // Make sure the request was successful
             if (resultCode == RESULT_OK) {
-                Item item = (Item)data.getSerializableExtra("data");
+                EstimateItem item = (EstimateItem) data.getSerializableExtra("data");
+                item.EstimateId = currentEstimate.Id;
+                item.pendingUpdate = true;
 
                 Integer position = data.getIntExtra("position", -1);
 
-                if (position >-1)
-                {
-                    Item existingItem = array_list_items.get(position);
+                if (position > -1) {
+                    EstimateItem existingItem = array_list_items.get(position);
                     existingItem.Name = item.Name;
                     existingItem.Description = item.Description;
                     existingItem.Rate = item.Rate;
                     existingItem.Quantity = item.Quantity;
-                }
-                else
-                {
+                    existingItem.pendingUpdate = true;
+                } else {
                     array_list_items.add(item);
                 }
 
@@ -622,131 +600,14 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
     }
 
     @Override
-    public void onDateSet(DatePickerDialog view, int year, int monthOfYear, int dayOfMonth)
-    {
+    public void onDateSet(DatePickerDialog view, int year, int monthOfYear, int dayOfMonth) {
         if (view.getTag().equals("estimate_date"))
             edit_purchase_date.setText(dayOfMonth + ". " + helper_number.getMonthName(monthOfYear) + " " + year);
         else
             edit_purchase_due_date.setText(dayOfMonth + ". " + helper_number.getMonthName(monthOfYear) + " " + year);
     }
 
-    public void RunGetClientService()
-    {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "clients/get", api_parameter, response -> {
-                    try {
-                        JSONObject result = ((JSONObject) response.get("data"));
-                        JSONArray clients = (JSONArray) result.get("clients");
-                        JSONArray estimate_lines = (JSONArray) result.get("estimate_lines");
-
-                        Integer estimate_number = helper_string.optInt(result, "estimate_number");
-
-                        logoImage = helper_string.optString(result, "logo");
-
-                        if (estimate_number > 0) {
-                            edit_purchase_number.setText(String.format("%04d", estimate_number));
-                        }
-
-                        array_list_clients.clear();
-                        array_clients = new String[clients.length()];
-
-                        Integer selected_client_index = 0;
-
-                        if (clients.length() > 0) {
-                            for (int i = 0; i < clients.length(); i++) {
-                                JSONObject obj = clients.getJSONObject(i);
-
-                                Client client = new Client();
-
-                                client.Id = obj.optInt("id");
-                                client.UserId = obj.optInt("user_id");
-                                client.Name = helper_string.optString(obj, "name");
-                                client.Email = helper_string.optString(obj, "email");
-                                client.Address1 = helper_string.optString(obj, "address1");
-                                client.Address2 = helper_string.optString(obj, "address2");
-                                client.City = helper_string.optString(obj, "city");
-                                client.State = helper_string.optString(obj, "state");
-                                client.Postcode = helper_string.optString(obj, "postcode");
-                                client.Country = helper_string.optString(obj, "country");
-
-                                array_list_clients.add(client);
-                                array_clients[i] = client.Name;
-
-                                if (currentEstimate != null && currentEstimate.Id > 0 && currentEstimate.ClientId == client.Id) {
-                                    selected_client_index = i;
-                                    currentClient = client;
-                                }
-
-                                /*if (obj.optInt("estimate_number") > 0)
-                                    estimate_number = obj.optInt("estimate_number");*/
-                            }
-
-                            ArrayAdapter<String> adapter = new ArrayAdapter<>(NewPurchaseActivity.this, R.layout.custom_simple_spinner_item, array_clients);
-                            spinner_client.setAdapter(adapter);
-                            spinner_client.setSelection(selected_client_index);
-                        }
-
-                        if (estimate_lines.length() > 0) {
-                            for (int i = 0; i < estimate_lines.length(); i++) {
-                                JSONObject obj = estimate_lines.getJSONObject(i);
-
-                                Item item = new Item();
-                                item.Id = obj.optInt("id");
-                                item.Quantity = obj.optDouble("quantity");
-                                item.Name = helper_string.optString(obj, "name");
-                                item.Rate = obj.optDouble("rate");
-                                item.Description = helper_string.optString(obj, "description");
-
-                                array_list_items.add(item);
-                            }
-
-                            calculate_total();
-                            setListViewHeightBasedOnChildren(list_items);
-                        }
-                    } catch (Exception ex) {
-                        Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_LONG).show();
-                    }
-
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                        } catch (JSONException e) {
-                            Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                    }
-                })
-        {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
-    }
-
-    public boolean isFormValid()
-    {
+    public boolean isFormValid() {
         boolean isValid = true;
 
         if (edit_purchase_number.getText().toString().trim().length() == 0) {
@@ -763,26 +624,23 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         return isValid;
     }
 
-    public void calculate_total()
-    {
+    public void calculate_total() {
         double subtotal = 0;
 
-        for(int i =0; i < array_list_items.size(); i++)
-        {
-            Item item = array_list_items.get(i);
+        for (int i = 0; i < array_list_items.size(); i++) {
+            EstimateItem item = array_list_items.get(i);
 
             subtotal = subtotal + (item.Rate * item.Quantity);
         }
 
         double tax_rate = 0;
 
-        try
-        {
+        try {
             if (edit_tax_rate.getText().toString().length() > 0) {
                 tax_rate = Double.parseDouble(edit_tax_rate.getText().toString());
             }
+        } catch (Exception ex) {
         }
-        catch(Exception ex){   }
 
         double tax = (tax_rate * subtotal) / 100;
 
@@ -813,12 +671,12 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         listView.requestLayout();
     }
 
-    public class EstimateItemAdapter extends ArrayAdapter<Item> {
+    public class EstimateItemAdapter extends ArrayAdapter<EstimateItem> {
         private final Context context;
-        private final ArrayList<Item> values;
+        private final ArrayList<EstimateItem> values;
         private String currency;
 
-        public EstimateItemAdapter(Context context, ArrayList<Item> values) {
+        public EstimateItemAdapter(Context context, ArrayList<EstimateItem> values) {
             super(context, R.layout.layout_estimate_item_row, values);
 
             this.context = context;
@@ -828,8 +686,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             currency = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
         }
 
-        public Item getItem(int position)
-        {
+        public EstimateItem getItem(int position) {
             return values.get(position);
         }
 
@@ -844,7 +701,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
             View rowView = inflater.inflate(R.layout.layout_estimate_item_row, parent, false);
 
-            Item item = values.get(position);
+            EstimateItem item = values.get(position);
 
             TextView text_name = (TextView) rowView.findViewById(R.id.text_name);
             TextView text_rate = (TextView) rowView.findViewById(R.id.text_rate);
@@ -853,8 +710,8 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             image_remove_item.setTag(position);
 
             text_name.setText(item.Name + "  -  " + item.Description);
-            text_rate.setText(currency + String.format( "%.2f", item.Quantity * item.Rate));
-            text_quantity.setText(item.Quantity + " x " + String.format( "%.2f", item.Rate));
+            text_rate.setText(currency + String.format("%.2f", item.Quantity * item.Rate));
+            text_quantity.setText(item.Quantity + " x " + String.format("%.2f", item.Rate));
 
             image_remove_item.setOnClickListener(v -> {
                 array_list_items.remove(Integer.parseInt(v.getTag().toString()));
@@ -867,8 +724,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         }
     }
 
-    public String downloadPDF()
-    {
+    public String downloadPDF() {
         return createPDF(currentEstimate.getPurchaseName() + ".pdf");
     }
 
@@ -880,10 +736,10 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
     private Integer line_item_start = 400;
     private Integer line_item_height = 28;
 
-    private BaseColor color_light_grey = new BaseColor(0,0,0);
-    private BaseColor color_invoice_header_background = new BaseColor(255,255,255);
+    private BaseColor color_light_grey = new BaseColor(0, 0, 0);
+    private BaseColor color_invoice_header_background = new BaseColor(255, 255, 255);
 
-    private String createPDF (String pdfFilename){
+    private String createPDF(String pdfFilename) {
 
         pageNumber = 0;
         Subtotal = 0;
@@ -911,8 +767,8 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             boolean beginPage = true;
             int y = 0;
 
-            for(int i=0; i < array_list_items.size(); i++ ){
-                if(beginPage){
+            for (int i = 0; i < array_list_items.size(); i++) {
+                if (beginPage) {
                     beginPage = false;
                     generateLayout(doc, cb);
                     generateHeader(doc, cb);
@@ -920,7 +776,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                 }
                 generateDetail(doc, cb, i, y);
                 y = y - line_item_height;
-                if(y < 50){
+                if (y < 50) {
                     printPageNumber(cb);
                     doc.newPage();
                     beginPage = true;
@@ -930,19 +786,18 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             Tax = (currentEstimate.TaxRate * Subtotal) / 100;
 
             //This is the last item (notes). If it's over page, put it all on the next page.
-            if ((y - 115) < 50)
-            {
+            if ((y - 115) < 50) {
                 printPageNumber(cb);
                 doc.newPage();
                 y = address1_start;
             }
 
-            y-=10;
+            y -= 10;
 
             createText(cb, 460, y - 10, getResources().getString(R.string.subtotal), SIZE_TEXT_NORMAL, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             createText(cb, 568, y - 10, helper_number.round(Subtotal), SIZE_TEXT_NORMAL, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
 
-            createText(cb, 460, y - 35, getResources().getString(R.string.tax) + "(" + currentEstimate.TaxRate+ "%)", SIZE_TEXT_NORMAL, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
+            createText(cb, 460, y - 35, getResources().getString(R.string.tax) + "(" + currentEstimate.TaxRate + "%)", SIZE_TEXT_NORMAL, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             createText(cb, 568, y - 35, helper_number.round(Tax), SIZE_TEXT_NORMAL, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
 
             LineSeparator lineSeparator = new LineSeparator();
@@ -960,8 +815,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
             printPageNumber(cb);
 
-        }
-        catch (DocumentException ex) {
+        } catch (DocumentException ex) {
             ex.printStackTrace();
             return "";
         } catch (Exception ex) {
@@ -979,10 +833,10 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         return path;
     }
 
-    private void generateLayout(Document doc, PdfContentByte cb)  {
+    private void generateLayout(Document doc, PdfContentByte cb) {
 
         try {
-            Rectangle rec = new Rectangle(30,line_heading_start + 15,580,line_heading_start - 8);
+            Rectangle rec = new Rectangle(30, line_heading_start + 15, 580, line_heading_start - 8);
             rec.setBackgroundColor(color_invoice_header_background);
             rec.setBorder(Rectangle.BOX);
             rec.setBorderWidth(3);
@@ -997,14 +851,13 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             createText(cb, 350, line_heading_start, getResources().getString(R.string.rate), SIZE_TEXT_HEADER_TABLE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             createText(cb, 460, line_heading_start, getResources().getString(R.string.quantity), SIZE_TEXT_HEADER_TABLE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             createText(cb, 568, line_heading_start, getResources().getString(R.string.amount), SIZE_TEXT_HEADER_TABLE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
-        }
-        catch (Exception ex){
+        } catch (Exception ex) {
             ex.printStackTrace();
         }
 
     }
 
-    private void generateHeader(Document doc, PdfContentByte cb)  {
+    private void generateHeader(Document doc, PdfContentByte cb) {
 
         try {
 
@@ -1014,18 +867,16 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
             String address = settings.getString(SettingActivity.KEY_ADDRESS, "");
 
-            String[] myAddress = address.length() > 0 ? address.split("\\|\\#", -1) : new String [0]; //new String[] {settings.getString("address1", ""), settings.getString("address2", ""),settings.getString("city", ""),settings.getString("state", ""),settings.getString("postcode", ""),settings.getString("country", "")};
+            String[] myAddress = address.length() > 0 ? address.split("\\|\\#", -1) : new String[0]; //new String[] {settings.getString("address1", ""), settings.getString("address2", ""),settings.getString("city", ""),settings.getString("state", ""),settings.getString("postcode", ""),settings.getString("country", "")};
 
             createText(cb, address_startX, address1_start, settings.getString("firstname", "") + " " + settings.getString("lastname", ""), SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_LEFT);
 
             Integer index = 1;
-            for(Integer i = 0; i < myAddress.length; i++)
-            {
+            for (Integer i = 0; i < myAddress.length; i++) {
                 String value = myAddress[i].trim();
 
                 if (value.length() > 0) {
-                    if (i == 3 && myAddress[4].trim().length() > 0)
-                    {
+                    if (i == 3 && myAddress[4].trim().length() > 0) {
                         value += " " + myAddress[4].trim();
                         i++;
                     }
@@ -1035,18 +886,16 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                 }
             }
 
-            String[] clientAddress = new String[] {currentClient.Address1, currentClient.Address2,currentClient.City,currentClient.State,currentClient.Postcode,currentClient.Country};
+            String[] clientAddress = new String[]{currentClient.Address1, currentClient.Address2, currentClient.City, currentClient.State, currentClient.Postcode, currentClient.Country};
 
             createText(cb, address_startX, address2_start, currentClient.Name, SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_LEFT);
 
             Integer clientIndex = 1;
-            for(Integer i = 0; i < clientAddress.length; i++)
-            {
+            for (Integer i = 0; i < clientAddress.length; i++) {
                 String value = clientAddress[i];
 
                 if (value != null && value.length() > 0) {
-                    if (i == 3 && clientAddress[4].length() > 0)
-                    {
+                    if (i == 3 && clientAddress[4].length() > 0) {
                         value += " " + clientAddress[4];
                         i++;
                     }
@@ -1060,17 +909,19 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
             createText(cb, 350, address1_start - 10, getResources().getString(R.string.estimate_capitalized), SIZE_TEXT_TITLE_PAGE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
 
-            if (!logoImage.isEmpty())
-            {
-                Image image = Image.getInstance(Base64.decode(logoImage, Base64.DEFAULT));
-                float width = image.getScaledWidth();
-                float height = image.getScaledHeight();
-                image.setAlignment(Element.ALIGN_RIGHT);
-                image.setAbsolutePosition(410 + (180 - width), address1_start - height + 10);
-                cb.addImage(image);
+            try (Realm realm = Realm.getDefaultInstance()) {
+                StringPreference logoPreference = realm.where(StringPreference.class).equalTo("name", "logoImage").findFirst();
+                if (logoPreference != null && !logoPreference.value.isEmpty()) {
+                    Image image = Image.getInstance(Base64.decode(logoPreference.value, Base64.DEFAULT));
+                    float width = image.getScaledWidth();
+                    float height = image.getScaledHeight();
+                    image.setAlignment(Element.ALIGN_RIGHT);
+                    image.setAbsolutePosition(410 + (180 - width), address1_start - height + 10);
+                    cb.addImage(image);
+                }
             }
 
-            createText(cb, 460, address2_start,  " #" + getResources().getString(R.string.estimate) , 10, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
+            createText(cb, 460, address2_start, " #" + getResources().getString(R.string.estimate), 10, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             createText(cb, 580, address2_start, currentEstimate.getEstimateNumberFormatted() + "", SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
 
             SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd, yyyy");
@@ -1078,22 +929,19 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             createText(cb, 460, address2_start - (address_height * 1) - 5, getResources().getString(R.string.estimate_date), SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             createText(cb, 580, address2_start - (address_height * 1) - 5, dateFormat.format(helper_number.unixToDate(currentEstimate.EstimateDate)), SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
 
-            if (currentEstimate.EstimateDueDate > 0)
-            {
+            if (currentEstimate.EstimateDueDate > 0) {
                 createText(cb, 460, address2_start - (address_height * 2) - 10, getResources().getString(R.string.estimate_due_date), SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
                 createText(cb, 580, address2_start - (address_height * 2) - 10, dateFormat.format(helper_number.unixToDate(currentEstimate.EstimateDueDate)), SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             }
 
-        }
-
-        catch (Exception ex){
+        } catch (Exception ex) {
             ex.printStackTrace();
         }
 
     }
 
-    private void generateDetail(Document doc, PdfContentByte cb, int index, int y)  {
-        Item item = array_list_items.get(index);
+    private void generateDetail(Document doc, PdfContentByte cb, int index, int y) {
+        EstimateItem item = array_list_items.get(index);
 
         if (item == null) return;
 
@@ -1112,9 +960,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
             lineSeparator.setLineColor(color_light_grey);
             lineSeparator.drawLine(cb, 30, 580, y - 10);
-        }
-
-        catch (Exception ex){
+        } catch (Exception ex) {
             ex.printStackTrace();
         }
 
@@ -1123,7 +969,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
     private void createHeadings(PdfContentByte cb, float x, float y, String text) {
         cb.beginText();
         cb.setFontAndSize(bf, 8);
-        cb.setTextMatrix(x,y);
+        cb.setTextMatrix(x, y);
         cb.showText(text.trim());
         cb.endText();
     }
@@ -1133,14 +979,14 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         fnt.setColor(color);
 
         Phrase phrase = new Phrase(text, fnt);
-        ColumnText.showTextAligned(cb, alignment, phrase, x, y, 0, PdfWriter.RUN_DIRECTION_RTL,AR_LIG);
+        ColumnText.showTextAligned(cb, alignment, phrase, x, y, 0, PdfWriter.RUN_DIRECTION_RTL, AR_LIG);
 
     }
 
-    private void  printPageNumber(PdfContentByte cb) {
+    private void printPageNumber(PdfContentByte cb) {
         cb.beginText();
         cb.setFontAndSize(bfBold, 8);
-        cb.showTextAligned(PdfContentByte.ALIGN_RIGHT, getResources().getString(R.string.page_no) + (pageNumber+1), 570 , 25, 0);
+        cb.showTextAligned(PdfContentByte.ALIGN_RIGHT, getResources().getString(R.string.page_no) + (pageNumber + 1), 570, 25, 0);
         cb.endText();
 
         pageNumber++;
@@ -1155,204 +1001,13 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
 
     private void initializeFonts() {
         try {
-            bfBold = BaseFont.createFont("res/font/tradbdo.ttf", BaseFont.IDENTITY_H,BaseFont.EMBEDDED);
-            bf = BaseFont.createFont("res/font/trado.ttf", BaseFont.IDENTITY_H,BaseFont.EMBEDDED);
+            bfBold = BaseFont.createFont("res/font/tradbdo.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+            bf = BaseFont.createFont("res/font/trado.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
 
         } catch (DocumentException ex) {
             //ex.printStackTrace();
         } catch (IOException ex) {
             //ex.printStackTrace();
         }
-    }
-
-    public void RunCreateEstimateService() {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "estimates/create", api_parameter, response -> {
-
-                    VolleyLog.d("estimates/create : " + response.toString());
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    try {
-                        Estimate estimate = getEstimate(response.getJSONObject("estimate_ret"));
-                        Intent intent = new Intent(NewPurchaseActivity.this, NewPurchaseActivity.class);
-                        intent.putExtra("data", estimate);
-                        startActivity(intent);
-                        finish();
-                        return;
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
-
-                    Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    intent.putExtra("tab", "purchases");
-                    startActivity(intent);
-                    finish();
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                        } catch (JSONException e) {
-                            Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                    }
-                })
-        {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
-    }
-
-    public void RunUpdateEstimateAsInvoicedService() {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "estimates/invoiced", api_parameter, response -> {
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    Invoice invoice = new Invoice();
-                    invoice.TaxRate = Double.parseDouble(edit_tax_rate.getText().toString().trim());
-                    invoice.ClientId = array_list_clients.get(spinner_client.getSelectedItemPosition()).Id;
-                    invoice.ClientNote = edit_client_notes.getText().toString().trim();
-
-                    Intent intent = new Intent(NewPurchaseActivity.this, NewInvoiceActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    intent.putExtra("data", invoice);
-                    intent.putExtra("items", array_list_items);
-
-                    startActivity(intent);
-                    finish();
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                        } catch (JSONException e) {
-                            Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                    }
-                })
-        {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
-    }
-
-    public void RunDeleteEstimateService() {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "estimates/delete", api_parameter, response -> {
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    intent.putExtra("tab", "purchases");
-                    startActivity(intent);
-                    finish();
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewPurchaseActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                        } catch (JSONException e) {
-                            Toast.makeText(NewPurchaseActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewPurchaseActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                    }
-                })
-        {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
-    }
-
-    private Estimate getEstimate(JSONObject obj) throws JSONException {
-        Estimate estimate = new Estimate();
-
-        estimate.Id = obj.optInt("id");
-        estimate.UserId = obj.optInt("user_id");
-
-        estimate.EstimateNumber = obj.getInt("estimate_number");
-        estimate.ClientName = helper_string.optString(obj, "client_name");
-        estimate.ClientId = obj.getInt("client_id");
-        estimate.ClientNote = helper_string.optString(obj, "notes");
-        estimate.EstimateDate = obj.optInt("estimate_date", 0);
-        estimate.EstimateDueDate = obj.optInt("due_date", 0);
-        estimate.TaxRate = obj.getDouble("tax_rate");
-        try {
-            estimate.TotalMoney = obj.getDouble("total");
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        try {
-            estimate.IsInvoiced = (obj.getInt("is_invoiced") == 1);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-        estimate.Created = obj.optInt("created_on", 0);
-        estimate.Updated = obj.optInt("updated_on", 0);
-
-        return estimate;
     }
 }

@@ -10,10 +10,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ListView;
-import android.widget.Toast;
 
 import com.bytecodr.invoicing.App;
-import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.adapter.DescriptionAdapter;
 import com.bytecodr.invoicing.model.Description;
@@ -59,11 +57,6 @@ public class DescriptionFragment extends Fragment {
 
         FloatingActionButton add_client_button = (FloatingActionButton) view.findViewById(R.id.add_button);
         add_client_button.setOnClickListener(v -> {
-            if (!CommonUtilities.isOnline(getContext())) {
-                Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
-                return;
-            }
-
             Intent intent = new Intent(getActivity(), NewDescriptionActivity.class);
             startActivityForResult(intent, 1);
         });
@@ -76,11 +69,6 @@ public class DescriptionFragment extends Fragment {
         list.setAdapter(adapter);
 
         list.setOnItemClickListener((parent, view1, position, id) -> {
-            if (!CommonUtilities.isOnline(getContext())) {
-                Toast.makeText(getContext(), "Disabled in offline mode", Toast.LENGTH_LONG).show();
-                return;
-            }
-
             Description description = adapter.getItem(position);
 
             Intent intent = new Intent(getActivity(), NewDescriptionActivity.class);
@@ -117,7 +105,7 @@ public class DescriptionFragment extends Fragment {
     public void updateViews() {
         try (Realm realm = Realm.getDefaultInstance()) {
             array_list.clear();
-            array_list.addAll(realm.copyFromRealm(realm.where(Description.class).findAll()));
+            array_list.addAll(realm.copyFromRealm(realm.where(Description.class).equalTo("pendingDelete", false).findAll()));
             adapter.notifyDataSetChanged();
         } catch (Exception e) {
 

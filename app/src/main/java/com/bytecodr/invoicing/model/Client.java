@@ -27,4 +27,7 @@ public class Client extends RealmObject implements Serializable {
     public String Country;
 
     public double TotalMoney;
+
+    public boolean pendingUpdate = false;
+    public boolean pendingDelete = false;
 }

@@ -16,7 +16,7 @@ import com.afollestad.materialdialogs.MaterialDialog;
 import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Description;
-import com.bytecodr.invoicing.model.Item;
+import com.bytecodr.invoicing.model.EstimateItem;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -33,15 +33,15 @@ import retrofit2.Callback;
 
 import static com.bytecodr.invoicing.App.SERVER_KEY_HASH;
 
-public class ItemPickerActivity extends AppCompatActivity
+public class EstimateItemPickerActivity extends AppCompatActivity
 {
     private MaterialDialog progressDialog;
 
     private String userId;
-    Item currentItem;
+    EstimateItem currentItem;
     Integer itemPosition;
 
-    private List<Item> array_list_items = new ArrayList<>();
+    private List<EstimateItem> array_list_items = new ArrayList<>();
     private List<Description> array_list_descriptions = new ArrayList<>();
     Spinner spinner_items;
     Spinner spinner_descriptions;
@@ -92,7 +92,7 @@ public class ItemPickerActivity extends AppCompatActivity
         spinner_items = (Spinner) findViewById(R.id.spinner_items);
         spinner_items.setOnItemSelectedListener((parent, view, position, id) -> {
             if (position != 0) {
-                Item item = array_list_items.get(position - 1);
+                EstimateItem item = array_list_items.get(position - 1);
 
                 edit_name.setText(item.Name);
                 edit_description.setText(item.Description);
@@ -109,7 +109,7 @@ public class ItemPickerActivity extends AppCompatActivity
             }
         });
 
-        currentItem = (Item)getIntent().getSerializableExtra("data");
+        currentItem = (EstimateItem) getIntent().getSerializableExtra("data");
         itemPosition = getIntent().getIntExtra("position", -1);
 
         if (currentItem != null)
@@ -145,7 +145,7 @@ public class ItemPickerActivity extends AppCompatActivity
         {
             if (isFormValid())
             {
-                Item newItem = new Item();
+                EstimateItem newItem = new EstimateItem();
                 newItem.Name = edit_name.getText().toString();
                 newItem.Description = edit_description.getText().toString();
 
@@ -321,7 +321,7 @@ public class ItemPickerActivity extends AppCompatActivity
 
     public void getData(){
         progressDialog.show();
-        App.getApis().getDescriptions(SERVER_KEY_HASH, userId).enqueue(new Callback<JsonObject>() {
+        App.getInstance().api.getDescriptions(SERVER_KEY_HASH, userId).enqueue(new Callback<JsonObject>() {
             @Override
             public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
                 if (response.isSuccessful()) {
@@ -330,10 +330,11 @@ public class ItemPickerActivity extends AppCompatActivity
                     if (status.equals("true")) {
                         JsonElement itemDataJe = responseJo.get("item_data");
                         JsonElement descDataJe = responseJo.get("desc_data");
-                        Type type1 = new TypeToken<List<Item>>(){}.getType();
+                        Type type1 = new TypeToken<List<EstimateItem>>() {
+                        }.getType();
                         Type type2 = new TypeToken<List<Description>>(){}.getType();
 
-                        List<Item> items;
+                        List<EstimateItem> items;
                         try {
                             items = new Gson().fromJson(itemDataJe, type1);
                         } catch (RuntimeException e) {
@@ -357,7 +358,7 @@ public class ItemPickerActivity extends AppCompatActivity
                             itemArray[i+1] = items.get(i).Name;
                         }
 
-                        ArrayAdapter<String> adapter1 = new ArrayAdapter<>(ItemPickerActivity.this, R.layout.custom_simple_spinner_item, itemArray);
+                        ArrayAdapter<String> adapter1 = new ArrayAdapter<>(EstimateItemPickerActivity.this, R.layout.custom_simple_spinner_item, itemArray);
                         spinner_items.setAdapter(adapter1);
 
                         int descriptionArraySize = descriptions.size();
@@ -366,7 +367,7 @@ public class ItemPickerActivity extends AppCompatActivity
                         for (int i = 0; i < descriptionArraySize; i++) {
                             descriptionsArray[i+1] = descriptions.get(i).title;
                         }
-                        ArrayAdapter<String> adapter2 = new ArrayAdapter<>(ItemPickerActivity.this, R.layout.custom_simple_spinner_item, descriptionsArray);
+                        ArrayAdapter<String> adapter2 = new ArrayAdapter<>(EstimateItemPickerActivity.this, R.layout.custom_simple_spinner_item, descriptionsArray);
                         spinner_descriptions.setAdapter(adapter2);
                         dismissProgress();
                     } else {

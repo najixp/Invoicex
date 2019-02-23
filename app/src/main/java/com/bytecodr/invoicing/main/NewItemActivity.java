@@ -8,25 +8,18 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
-import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.NetworkResponse;
-import com.android.volley.Request;
-import com.android.volley.toolbox.JsonObjectRequest;
 import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Item;
-import com.bytecodr.invoicing.network.Network;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.HashMap;
-import java.util.Map;
+import io.realm.Realm;
+import io.realm.Sort;
 
-public class NewItemActivity extends AppCompatActivity
-{
+public class NewItemActivity extends AppCompatActivity {
     public static final String TAG = "NewItemActivity";
     private MaterialDialog progressDialog;
     private JSONObject api_parameter;
@@ -38,8 +31,7 @@ public class NewItemActivity extends AppCompatActivity
     private EditText edit_rate;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState)
-    {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_new_item);
 
@@ -50,8 +42,7 @@ public class NewItemActivity extends AppCompatActivity
         SharedPreferences settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
 
         //Means user is not logged in
-        if (settings == null || settings.getInt("logged_in", 0) == 0 || settings.getString("api_key", "").equals(""))
-        {
+        if (settings == null || settings.getInt("logged_in", 0) == 0 || settings.getString("api_key", "").equals("")) {
             Intent intent = new Intent(this, LoginActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
@@ -65,23 +56,20 @@ public class NewItemActivity extends AppCompatActivity
                 .cancelable(false)
                 .progress(true, 0).build();
 
-        edit_name = (EditText)findViewById(R.id.edit_name);
-        edit_description = (EditText)findViewById(R.id.edit_description);
-        edit_rate = (EditText)findViewById(R.id.edit_rate);
+        edit_name = (EditText) findViewById(R.id.edit_name);
+        edit_description = (EditText) findViewById(R.id.edit_description);
+        edit_rate = (EditText) findViewById(R.id.edit_rate);
 
-        currentItem = (Item)getIntent().getSerializableExtra("data");
+        currentItem = (Item) getIntent().getSerializableExtra("data");
 
-        if (currentItem != null && currentItem.Id > 0)
-        {
+        if (currentItem != null && currentItem.Id > 0) {
             edit_name.setTag(currentItem.Id);
             edit_name.setText(currentItem.Name);
             edit_description.setText(currentItem.Description);
             edit_rate.setText(String.format("%.2f", currentItem.Rate));
 
             toolbar.setTitle(currentItem.Name);
-        }
-        else
-        {
+        } else {
             toolbar.setTitle(getResources().getString(R.string.title_activity_new_item));
         }
 
@@ -91,16 +79,13 @@ public class NewItemActivity extends AppCompatActivity
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu)
-    {
+    public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_new_item, menu);
 
-        if (currentItem != null)
-        {
+        if (currentItem != null) {
             MenuItem item = menu.findItem(R.id.action_delete);
-            if (item != null)
-            {
+            if (item != null) {
                 item.setVisible(true);
             }
         }
@@ -109,52 +94,53 @@ public class NewItemActivity extends AppCompatActivity
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item)
-    {
+    public boolean onOptionsItemSelected(MenuItem item) {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_save)
-        {
-            if (isFormValid())
-            {
-                SharedPreferences settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
+        if (id == R.id.action_save) {
+            if (isFormValid()) {
+                try (Realm realm = Realm.getDefaultInstance()) {
+                    Item item1 = new Item();
 
-                try
-                {
-                    api_parameter = new JSONObject();
-                    api_parameter.put("user_id", settings.getInt("id", 0));
+                    String Id = edit_name.getTag().toString();
+                    if (Id.equals("0")) {
+                        Item item2 = realm.where(Item.class).sort("Id", Sort.ASCENDING).findFirst();
+                        if (item2 == null || item2.Id > -1)
+                            item1.Id = -1;
+                        else
+                            item1.Id = item2.Id - 1;
+                    } else
+                        item1.Id = Long.valueOf(Id);
 
-                    Object itemId = edit_name.getTag();
 
-                    if (!itemId.equals("0"))
-                    {
-                        api_parameter.put("id", itemId.toString());
+                    item1.Name = edit_name.getText().toString().trim();
+                    try {
+                        item1.Rate = Double.valueOf(edit_rate.getText().toString().trim().replace(',', '.'));
+                    } catch (NumberFormatException e) {
+
                     }
+                    item1.Description = edit_description.getText().toString().trim();
+                    item1.pendingUpdate = true;
 
-                    api_parameter.put("name", edit_name.getText().toString().trim());
-                    api_parameter.put("rate", edit_rate.getText().toString().trim());
-                    api_parameter.put("description", edit_description.getText().toString().trim());
+                    realm.executeTransaction(realm1 -> realm1.insertOrUpdate(item1));
+                    App.getInstance().updateData();
 
-                    RunCreateItemService();
-                }
-                catch (JSONException ex)
-                {
-                    Toast.makeText(NewItemActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
+                    Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    intent.putExtra("tab", "items");
+                    startActivity(intent);
+                    finish();
                 }
 
                 return true;
-            }
-            else
-            {
+            } else {
                 return false;
             }
-        }
-        else if (id == R.id.action_delete)
-        {
+        } else if (id == R.id.action_delete) {
             new MaterialDialog.Builder(this)
                     .title(R.string.delete)
                     .content(R.string.delete_item)
@@ -163,49 +149,45 @@ public class NewItemActivity extends AppCompatActivity
                     .cancelable(false)
                     .negativeColorRes(R.color.colorAccent)
                     .positiveColorRes(R.color.colorAccent)
-                    .callback(new MaterialDialog.ButtonCallback()
-                    {
+                    .callback(new MaterialDialog.ButtonCallback() {
                         @Override
-                        public void onPositive(MaterialDialog dialog)
-                        {
-                            //Delete
-                            SharedPreferences settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
-
+                        public void onPositive(MaterialDialog dialog) {
                             Object id = edit_name.getTag();
 
-                            if (!id.equals("0"))
-                            {
-                                try
-                                {
-                                    api_parameter = new JSONObject();
-                                    api_parameter.put("id", id.toString());
-                                    api_parameter.put("user_id", settings.getInt("id", 0));
+                            if (!id.equals("0")) {
+                                try (Realm realm = Realm.getDefaultInstance()) {
+                                    Item item1 = realm.where(Item.class).equalTo("Id", Long.valueOf(id.toString())).findFirst();
+                                    if (item1 != null) {
+                                        realm.executeTransaction(realm1 -> {
+                                                    item1.pendingDelete = true;
+                                                    realm1.insertOrUpdate(item1);
+                                                }
+                                        );
+                                        App.getInstance().updateData();
+                                    }
 
-                                    RunDeleteItemService();
-                                }
-                                catch (JSONException ex)
-                                {
-                                    Toast.makeText(NewItemActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
+                                    Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    intent.putExtra("tab", "items");
+                                    startActivity(intent);
+                                    finish();
                                 }
                             }
                         }
 
                         @Override
-                        public void onNegative(MaterialDialog dialog)
-                        {
+                        public void onNegative(MaterialDialog dialog) {
                             //Cancel
                             dialog.dismiss();
 
-                            if (dialog != null && dialog.isShowing())
-                            {
+                            if (dialog != null && dialog.isShowing()) {
                                 // If the response is JSONObject instead of expected JSONArray
                                 dialog.dismiss();
                             }
                         }
                     })
                     .show();
-        }
-        else if (id == android.R.id.home) //Handles the back button, to make sure items fragment is preselected
+        } else if (id == android.R.id.home) //Handles the back button, to make sure items fragment is preselected
         {
             Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -217,114 +199,16 @@ public class NewItemActivity extends AppCompatActivity
         return super.onOptionsItemSelected(item);
     }
 
-    public boolean isFormValid()
-    {
+    public boolean isFormValid() {
         boolean isValid = true;
 
-        if (edit_name.getText().toString().trim().length() == 0){
+        if (edit_name.getText().toString().trim().length() == 0) {
             edit_name.setError("Name required");
             isValid = false;
-        }
-        else
-        {
+        } else {
             edit_name.setError(null);
         }
 
         return isValid;
-    }
-
-    public void RunCreateItemService()
-    {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "items/create", api_parameter, response -> {
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    intent.putExtra("tab", "items");
-                    startActivity(intent);
-                    finish();
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewItemActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                        } catch (JSONException e) {
-                            Toast.makeText(NewItemActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewItemActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                    }
-                })
-        {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
-    }
-
-    public void RunDeleteItemService() {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "items/delete", api_parameter, response -> {
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    intent.putExtra("tab", "items");
-                    startActivity(intent);
-                    finish();
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewItemActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                        } catch (JSONException e) {
-                            Toast.makeText(NewItemActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewItemActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                    }
-                })
-        {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
     }
 }

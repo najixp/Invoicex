@@ -16,8 +16,7 @@ import com.bytecodr.invoicing.model.Client;
 import java.util.ArrayList;
 
 
-public class ClientAdapter extends ArrayAdapter<Client>
-{
+public class ClientAdapter extends ArrayAdapter<Client> {
     private final Context context;
     private final ArrayList<Client> values;
     private String currency;
@@ -32,8 +31,7 @@ public class ClientAdapter extends ArrayAdapter<Client>
         currency = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
     }
 
-    public Client getItem(int position)
-    {
+    public Client getItem(int position) {
         return values.get(position);
     }
 
@@ -52,7 +50,7 @@ public class ClientAdapter extends ArrayAdapter<Client>
         TextView text_total = (TextView) rowView.findViewById(R.id.text_total);
 
         text_name.setText(values.get(position).Name);
-        text_total.setText(currency + String.format( "%.2f", values.get(position).TotalMoney));
+        text_total.setText(currency + String.format("%.2f", values.get(position).TotalMoney));
 
         return rowView;
     }

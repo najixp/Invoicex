@@ -2,10 +2,10 @@ package com.bytecodr.invoicing;
 
 import android.app.Application;
 import android.content.SharedPreferences;
-import android.util.Log;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
+import com.android.volley.VolleyLog;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.bytecodr.invoicing.helper.helper_string;
@@ -15,8 +15,11 @@ import com.bytecodr.invoicing.model.Client;
 import com.bytecodr.invoicing.model.Description;
 import com.bytecodr.invoicing.model.DoublePreference;
 import com.bytecodr.invoicing.model.Estimate;
+import com.bytecodr.invoicing.model.EstimateItem;
 import com.bytecodr.invoicing.model.Invoice;
+import com.bytecodr.invoicing.model.InvoiceItem;
 import com.bytecodr.invoicing.model.Item;
+import com.bytecodr.invoicing.model.StringPreference;
 import com.bytecodr.invoicing.network.Network;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -51,6 +54,7 @@ public class App extends Application {
     final static int dbSchemaVersion = 1;
 
     private static App mInstance;
+    public Apis api;
 
     private static Retrofit retrofit = null;
     private RequestQueue mRequestQueue;
@@ -71,42 +75,26 @@ public class App extends Application {
                 .schemaVersion(dbSchemaVersion)
                 .build();
 
+        HttpLoggingInterceptor interceptor = new HttpLoggingInterceptor();
+        interceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+        OkHttpClient client = new OkHttpClient.Builder()
+                .addInterceptor(interceptor).build();
+
+        retrofit = new Retrofit.Builder()
+                .client(client)
+                .addConverterFactory(GsonConverterFactory.create())
+                .baseUrl(BASE_URL)
+                .build();
+
+        api = retrofit.create(Apis.class);
+        VolleyLog.DEBUG = true;
+        mRequestQueue = Volley.newRequestQueue(getApplicationContext());
+
         Realm.setDefaultConfiguration(realmConfiguration);
     }
 
-    public RequestQueue getRequestQueue() {
-        if (mRequestQueue == null) {
-            // getApplicationContext() is key, it keeps you from leaking the
-            // Activity or BroadcastReceiver if someone passes one in.
-            mRequestQueue = Volley.newRequestQueue(getApplicationContext());
-        }
-        return mRequestQueue;
-    }
-
     public <T> void addToRequestQueue(Request<T> req) {
-        getRequestQueue().add(req);
-    }
-
-    private static OkHttpClient buildClient() {
-        return new OkHttpClient
-                .Builder()
-                .addInterceptor(new HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY))
-                .build();
-    }
-
-    private static Retrofit getClient() {
-        if (retrofit == null) {
-            retrofit = new Retrofit.Builder()
-                    .client(buildClient())
-                    .addConverterFactory(GsonConverterFactory.create())
-                    .baseUrl(BASE_URL)
-                    .build();
-        }
-        return retrofit;
-    }
-
-    public static Apis getApis() {
-        return getClient().create(Apis.class);
+        mRequestQueue.add(req);
     }
 
     private List<Runnable> onUpdatedListeners = new ArrayList<>();
@@ -126,6 +114,12 @@ public class App extends Application {
                 }
     }
 
+    List<Long> pendingClients = new ArrayList<>(),
+            pendingDescriptions = new ArrayList<>(),
+            pendingEstimates = new ArrayList<>(),
+            pendingInvoices = new ArrayList<>(),
+            pendingItems = new ArrayList<>();
+
     public void updateData() {
         SharedPreferences settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
         String userId = String.valueOf(settings.getInt("id", -1));
@@ -133,6 +127,7 @@ public class App extends Application {
         JSONObject api_parameter = new JSONObject();
         try {
             api_parameter.put("user_id", settings.getInt("id", 0));
+            api_parameter.put("include_logo", 1);
         } catch (JSONException ex) {
         }
 
@@ -142,8 +137,11 @@ public class App extends Application {
                         JSONObject result = ((JSONObject) response.get("data"));
                         JSONArray items = (JSONArray) result.get("clients");
 
+                        String logoImage = helper_string.optString(result, "logo");
+
                         try (Realm realm = Realm.getDefaultInstance()) {
-                            realm.executeTransaction(realm1 -> realm1.where(Client.class).findAll().deleteAllFromRealm());
+                            realm.executeTransaction(realm13 -> realm13.insertOrUpdate(new StringPreference("logoImage", logoImage)));
+                            realm.executeTransaction(realm1 -> realm1.where(Client.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
 
                             for (int i = 0; i < items.length(); i++) {
                                 JSONObject obj = items.getJSONObject(i);
@@ -151,6 +149,10 @@ public class App extends Application {
                                 Client item = new Client();
 
                                 item.Id = obj.optInt("id");
+
+                                if (realm.where(Client.class).equalTo("Id", item.Id).count() > 0)
+                                    continue;
+
                                 item.UserId = obj.optInt("user_id");
 
                                 item.Name = helper_string.optString(obj, "name");
@@ -167,7 +169,7 @@ public class App extends Application {
                                 item.Created = obj.optInt("created_on", 0);
                                 item.Updated = obj.optInt("updated_on", 0);
 
-                                realm.executeTransaction(realm12 -> realm12.insertOrUpdate(item));
+                                realm.executeTransaction(realm12 -> realm12.insert(item));
                             }
                         }
 
@@ -191,9 +193,11 @@ public class App extends Application {
                     try {
                         JSONObject result = ((JSONObject) response.get("data"));
                         JSONArray estimates = (JSONArray) result.get("estimates");
+                        JSONArray estimate_lines = (JSONArray) result.get("estimate_lines");
 
                         try (Realm realm = Realm.getDefaultInstance()) {
-                            realm.executeTransaction(realm1 -> realm1.where(Estimate.class).findAll().deleteAllFromRealm());
+                            realm.executeTransaction(realm1 -> realm1.where(Estimate.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
+                            realm.executeTransaction(realm1 -> realm1.where(EstimateItem.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
 
                             for (int i = 0; i < estimates.length(); i++) {
                                 JSONObject obj = estimates.getJSONObject(i);
@@ -201,6 +205,10 @@ public class App extends Application {
                                 Estimate estimate = new Estimate();
 
                                 estimate.Id = obj.optInt("id");
+
+                                if (realm.where(Estimate.class).equalTo("Id", estimate.Id).count() > 0)
+                                    continue;
+
                                 estimate.UserId = obj.optInt("user_id");
 
                                 estimate.EstimateNumber = obj.getInt("estimate_number");
@@ -217,6 +225,20 @@ public class App extends Application {
                                 estimate.Updated = obj.optInt("updated_on", 0);
 
                                 realm.executeTransaction(realm12 -> realm12.insertOrUpdate(estimate));
+                            }
+
+                            for (int j = 0; j < estimate_lines.length(); j++) {
+                                JSONObject obj1 = estimate_lines.getJSONObject(j);
+
+                                EstimateItem item = new EstimateItem();
+                                item.Id = obj1.optInt("id");
+                                item.EstimateId = obj1.optInt("estimate_id");
+                                item.Quantity = obj1.optDouble("quantity");
+                                item.Name = helper_string.optString(obj1, "name");
+                                item.Rate = obj1.optDouble("rate");
+                                item.Description = helper_string.optString(obj1, "description");
+
+                                realm.executeTransaction(realm14 -> realm14.insertOrUpdate(item));
                             }
                         }
                         notifyOnUpdateListeners();
@@ -256,11 +278,10 @@ public class App extends Application {
 
                         JSONObject result = ((JSONObject) response.get("data"));
                         JSONArray invoices = (JSONArray) result.get("invoices");
-
-                        Log.e("INVOICES", invoices.toString());
+                        JSONArray invoice_lines = (JSONArray) result.get("invoice_lines");
 
                         try (Realm realm = Realm.getDefaultInstance()) {
-                            realm.executeTransaction(realm1 -> realm1.where(Invoice.class).findAll().deleteAllFromRealm());
+                            realm.executeTransaction(realm1 -> realm1.where(Invoice.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
 
                             for (int i = 0; i < invoices.length(); i++) {
                                 JSONObject obj = invoices.getJSONObject(i);
@@ -268,6 +289,10 @@ public class App extends Application {
                                 Invoice invoice = new Invoice();
 
                                 invoice.Id = obj.optInt("id");
+
+                                if (realm.where(Invoice.class).equalTo("Id", invoice.Id).count() > 0)
+                                    continue;
+
                                 invoice.UserId = obj.optInt("user_id");
 
                                 invoice.InvoiceNumber = obj.getInt("invoice_number");
@@ -287,6 +312,21 @@ public class App extends Application {
                                     unpaid_total += invoice.TotalMoney;
 
                                 realm.executeTransaction(realm12 -> realm12.insertOrUpdate(invoice));
+                            }
+
+                            for (int j = 0; j < invoice_lines.length(); j++) {
+                                JSONObject obj1 = invoice_lines.getJSONObject(j);
+
+                                InvoiceItem item = new InvoiceItem();
+                                item.Id = obj1.optInt("id");
+                                item.InvoiceId = obj1.optInt("invoice_id");
+                                item.Quantity = obj1.optDouble("quantity");
+                                item.Name = helper_string.optString(obj1, "name");
+                                item.Rate = obj1.optDouble("rate");
+                                item.Description = helper_string.optString(obj1,
+                                        "description");
+
+                                realm.executeTransaction(realm14 -> realm14.insertOrUpdate(item));
                             }
 
                             double finalUnpaid_total = unpaid_total;
@@ -313,7 +353,7 @@ public class App extends Application {
                         JSONArray items = (JSONArray) result.get("items");
 
                         try (Realm realm = Realm.getDefaultInstance()) {
-                            realm.executeTransaction(realm1 -> realm1.where(Item.class).findAll().deleteAllFromRealm());
+                            realm.executeTransaction(realm1 -> realm1.where(Item.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
 
                             for (int i = 0; i < items.length(); i++) {
                                 JSONObject obj = items.getJSONObject(i);
@@ -321,6 +361,10 @@ public class App extends Application {
                                 Item item = new Item();
 
                                 item.Id = obj.optInt("id");
+
+                                if (realm.where(Item.class).equalTo("Id", item.Id).count() > 0)
+                                    continue;
+
                                 item.UserId = obj.optInt("user_id");
 
                                 item.Name = helper_string.optString(obj, "name");
@@ -348,7 +392,7 @@ public class App extends Application {
             }
         });
 
-        App.getApis().getDescriptions(SERVER_KEY_HASH, userId).enqueue(new Callback<JsonObject>() {
+        App.getInstance().api.getDescriptions(SERVER_KEY_HASH, userId).enqueue(new Callback<JsonObject>() {
             @Override
             public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
                 if (response.isSuccessful()) {
@@ -361,8 +405,11 @@ public class App extends Application {
                         List<Description> descriptions = new Gson().fromJson(dataJe, type);
                         try (Realm realm = Realm.getDefaultInstance()) {
                             realm.executeTransaction(realm1 -> {
-                                realm1.where(Description.class).findAll().deleteAllFromRealm();
-                                realm1.insertOrUpdate(descriptions);
+                                realm1.where(Description.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm();
+
+                                for (Description description : descriptions)
+                                    if (realm1.where(Description.class).equalTo("id", description.id).count() == 0)
+                                        realm1.insertOrUpdate(description);
                             });
                         }
                     }
@@ -375,5 +422,380 @@ public class App extends Application {
 
             }
         });
+
+        try (Realm realm = Realm.getDefaultInstance()) {
+            for (final Client client : realm.copyFromRealm(realm.where(Client.class).equalTo("pendingUpdate", true).findAll())) {
+                if (pendingClients.contains(client.Id))
+                    continue;
+
+                pendingClients.add(client.Id);
+
+                try {
+                    api_parameter = new JSONObject();
+                    api_parameter.put("user_id", settings.getInt("id", 0));
+
+                    if (client.Id >= 0) {
+                        api_parameter.put("id", client.Id + "");
+                    }
+
+                    api_parameter.put("name", client.Name);
+                    api_parameter.put("email", client.Email);
+                    api_parameter.put("address1", client.Address1);
+                    api_parameter.put("address2", client.Address2);
+                    api_parameter.put("city", client.City);
+                    api_parameter.put("state", client.State);
+                    api_parameter.put("postcode", client.Postcode);
+                    api_parameter.put("country", client.Country);
+
+                    addToRequestQueue(new JsonObjectRequest
+                            (Request.Method.POST, Network.API_URL + "clients/create", api_parameter, response -> {
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Client.class).equalTo("Id", client.Id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingClients.remove(client.Id);
+                            }, error -> {
+                            }) {
+
+                        @Override
+                        public Map<String, String> getHeaders() {
+                            Map<String, String> params = new HashMap<>();
+                            params.put("X-API-KEY", MainActivity.api_key);
+                            return params;
+                        }
+                    });
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (final Client client : realm.copyFromRealm(realm.where(Client.class).equalTo("pendingDelete", true).findAll())) {
+                if (pendingClients.contains(client.Id))
+                    continue;
+
+                pendingClients.add(client.Id);
+
+                try {
+                    api_parameter = new JSONObject();
+                    api_parameter.put("id", client.Id + "");
+                    api_parameter.put("user_id", settings.getInt("id", 0));
+
+                    addToRequestQueue(new JsonObjectRequest
+                            (Request.Method.POST, Network.API_URL + "clients/delete", api_parameter, response -> {
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Client.class).equalTo("Id", client.Id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingClients.remove(client.Id);
+                            }, error -> {
+                            }) {
+
+                        @Override
+                        public Map<String, String> getHeaders() {
+                            Map<String, String> params = new HashMap<>();
+                            params.put("X-API-KEY", MainActivity.api_key);
+                            return params;
+                        }
+                    });
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (final Item item : realm.copyFromRealm(realm.where(Item.class).equalTo("pendingUpdate", true).findAll())) {
+                if (pendingItems.contains(item.Id))
+                    continue;
+
+                pendingItems.add(item.Id);
+
+                try {
+                    api_parameter = new JSONObject();
+                    api_parameter.put("user_id", settings.getInt("id", 0));
+
+                    if (item.Id >= 0) {
+                        api_parameter.put("id", item.Id + "");
+                    }
+
+                    api_parameter.put("name", item.Name);
+                    api_parameter.put("rate", item.Rate);
+                    api_parameter.put("description", item.Description);
+
+                    addToRequestQueue(new JsonObjectRequest
+                            (Request.Method.POST, Network.API_URL + "items/create", api_parameter, response -> {
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Item.class).equalTo("Id", item.Id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingItems.remove(item.Id);
+                            }, error -> {
+                            }) {
+
+                        @Override
+                        public Map<String, String> getHeaders() {
+                            Map<String, String> params = new HashMap<>();
+                            params.put("X-API-KEY", MainActivity.api_key);
+                            return params;
+                        }
+                    });
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (final Item item : realm.copyFromRealm(realm.where(Item.class).equalTo("pendingDelete", true).findAll())) {
+                if (pendingItems.contains(item.Id))
+                    continue;
+
+                pendingItems.add(item.Id);
+
+                try {
+                    api_parameter = new JSONObject();
+                    api_parameter.put("id", item.Id + "");
+                    api_parameter.put("user_id", settings.getInt("id", 0));
+
+                    addToRequestQueue(new JsonObjectRequest
+                            (Request.Method.POST, Network.API_URL + "items/delete", api_parameter, response -> {
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Item.class).equalTo("Id", item.Id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingItems.remove(item.Id);
+                            }, error -> {
+                            }) {
+
+                        @Override
+                        public Map<String, String> getHeaders() {
+                            Map<String, String> params = new HashMap<>();
+                            params.put("X-API-KEY", MainActivity.api_key);
+                            return params;
+                        }
+                    });
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (final Description description : realm.copyFromRealm(realm.where(Description.class).equalTo("pendingUpdate", true).findAll())) {
+                if (pendingDescriptions.contains(description.id))
+                    continue;
+
+                pendingDescriptions.add(description.id);
+
+                App.getInstance().api.addDescription(SERVER_KEY_HASH, userId, description.title, description.description).enqueue(new Callback<JsonObject>() {
+                    @Override
+                    public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
+                        if (response.isSuccessful()) {
+                            JsonObject responseJo = response.body();
+                            String status = responseJo.get("status").getAsString();
+                            if (status.equals("true")) {
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Description.class).equalTo("id", description.id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingDescriptions.remove(description.id);
+                            }
+
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<JsonObject> call, Throwable t) {
+                    }
+                });
+            }
+
+            for (final Description description : realm.copyFromRealm(realm.where(Description.class).equalTo("pendingDelete", true).findAll())) {
+                if (pendingDescriptions.contains(description.id))
+                    continue;
+
+                pendingDescriptions.add(description.id);
+
+                App.getInstance().api.deleteDescription(SERVER_KEY_HASH, userId, description.id + "").enqueue(new Callback<JsonObject>() {
+                    @Override
+                    public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
+                        if (response.isSuccessful()) {
+                            JsonObject responseJo = response.body();
+                            String status = responseJo.get("status").getAsString();
+                            if (status.equals("true")) {
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Description.class).equalTo("id", description.id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingDescriptions.remove(description.id);
+                            }
+
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<JsonObject> call, Throwable t) {
+
+                    }
+                });
+            }
+
+            for (final Estimate estimate : realm.copyFromRealm(realm.where(Estimate.class).equalTo("pendingUpdate", true).findAll())) {
+                if (pendingEstimates.contains(estimate.Id))
+                    continue;
+
+                pendingEstimates.add(estimate.Id);
+
+                try {
+                    api_parameter = new JSONObject();
+                    api_parameter.put("user_id", settings.getInt("id", 0));
+
+                    if (estimate.Id >= 0) {
+                        api_parameter.put("id", estimate.Id + "");
+                    }
+
+                    api_parameter.put("estimate_number", estimate.EstimateNumber);
+                    api_parameter.put("tax_rate", estimate.TaxRate);
+                    api_parameter.put("client_id", estimate.ClientId);
+                    api_parameter.put("notes", estimate.ClientNote);
+
+                    api_parameter.put("estimate_date", estimate.EstimateDate);
+                    api_parameter.put("due_date", estimate.EstimateDueDate);
+
+                    Gson json = new Gson();
+
+                    api_parameter.put("items", json.toJson(realm.copyFromRealm(realm.where(EstimateItem.class).equalTo("EstimateId", estimate.Id).findAll())));
+
+                    addToRequestQueue(new JsonObjectRequest
+                            (Request.Method.POST, Network.API_URL + "estimates/create", api_parameter, response -> {
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Estimate.class).equalTo("Id", estimate.Id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingEstimates.remove(estimate.Id);
+                            }, error -> {
+                            }) {
+                        @Override
+                        public Map<String, String> getHeaders() {
+                            Map<String, String> params = new HashMap<>();
+                            params.put("X-API-KEY", MainActivity.api_key);
+                            return params;
+                        }
+                    });
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (final Estimate estimate : realm.copyFromRealm(realm.where(Estimate.class).equalTo("pendingDelete", true).findAll())) {
+                if (pendingEstimates.contains(estimate.Id))
+                    continue;
+
+                pendingEstimates.add(estimate.Id);
+
+                try {
+                    api_parameter = new JSONObject();
+                    api_parameter.put("id", estimate.Id + "");
+                    api_parameter.put("user_id", settings.getInt("id", 0));
+
+                    addToRequestQueue(new JsonObjectRequest
+                            (Request.Method.POST, Network.API_URL + "estimates/delete", api_parameter, response -> {
+
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Estimate.class).equalTo("Id", estimate.Id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingEstimates.remove(estimate.Id);
+                            }, error -> {
+                            }) {
+
+                        @Override
+                        public Map<String, String> getHeaders() {
+                            Map<String, String> params = new HashMap<>();
+                            params.put("X-API-KEY", MainActivity.api_key);
+                            return params;
+                        }
+                    });
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (final Invoice invoice : realm.copyFromRealm(realm.where(Invoice.class).equalTo("pendingUpdate", true).findAll())) {
+                if (pendingInvoices.contains(invoice.Id))
+                    continue;
+
+                pendingInvoices.add(invoice.Id);
+
+                try {
+                    api_parameter = new JSONObject();
+                    api_parameter.put("user_id", settings.getInt("id", 0));
+
+                    if (invoice.Id >= 0) {
+                        api_parameter.put("id", invoice.Id + "");
+                    }
+
+                    api_parameter.put("invoice_number", invoice.InvoiceNumber);
+                    api_parameter.put("tax_rate", invoice.TaxRate);
+                    api_parameter.put("client_id", invoice.ClientId);
+                    api_parameter.put("notes", invoice.ClientNote);
+                    api_parameter.put("paid", (invoice.IsPaid ? 1 : 0));
+
+                    api_parameter.put("invoice_date", invoice.InvoiceDate);
+                    api_parameter.put("due_date", invoice.InvoiceDueDate);
+
+                    Gson json = new Gson();
+
+                    api_parameter.put("items", json.toJson(realm.copyFromRealm(realm.where(InvoiceItem.class).equalTo("InvoiceId", invoice.Id).findAll())));
+
+                    addToRequestQueue(new JsonObjectRequest
+                            (Request.Method.POST, Network.API_URL + "invoices/create", api_parameter, response -> {
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Invoice.class).equalTo("Id", invoice.Id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingInvoices.remove(invoice.Id);
+                            }, error -> {
+                            }) {
+                        @Override
+                        public Map<String, String> getHeaders() {
+                            Map<String, String> params = new HashMap<>();
+                            params.put("X-API-KEY", MainActivity.api_key);
+                            return params;
+                        }
+                    });
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (final Invoice invoice : realm.copyFromRealm(realm.where(Invoice.class).equalTo("pendingDelete", true).findAll())) {
+                if (pendingInvoices.contains(invoice.Id))
+                    continue;
+
+                pendingInvoices.add(invoice.Id);
+
+                try {
+                    api_parameter = new JSONObject();
+                    api_parameter.put("id", invoice.Id + "");
+                    api_parameter.put("user_id", settings.getInt("id", 0));
+
+                    addToRequestQueue(new JsonObjectRequest
+                            (Request.Method.POST, Network.API_URL + "invoices/delete", api_parameter, response -> {
+
+                                try (Realm realm1 = Realm.getDefaultInstance()) {
+                                    realm1.executeTransaction(realm2 -> realm2.where(Invoice.class).equalTo("Id", invoice.Id).findAll().deleteAllFromRealm());
+                                }
+                                updateData();
+                                pendingInvoices.remove(invoice.Id);
+                            }, error -> {
+                            }) {
+
+                        @Override
+                        public Map<String, String> getHeaders() {
+                            Map<String, String> params = new HashMap<>();
+                            params.put("X-API-KEY", MainActivity.api_key);
+                            return params;
+                        }
+                    });
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 }

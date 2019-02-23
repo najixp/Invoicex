@@ -9,19 +9,22 @@ import io.realm.annotations.PrimaryKey;
 public class Description extends RealmObject implements Parcelable {
 
     @PrimaryKey
-    public String id;
+    public long id;
     public String title;
     public String description;
 
+    public boolean pendingUpdate = false;
+    public boolean pendingDelete = false;
+
     protected Description(Parcel in) {
-        id = in.readString();
+        id = in.readLong();
         title = in.readString();
         description = in.readString();
     }
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeString(id);
+        dest.writeLong(id);
         dest.writeString(title);
         dest.writeString(description);
     }

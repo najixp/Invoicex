@@ -8,25 +8,17 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
-import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
+import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Description;
-import com.google.gson.JsonObject;
 
-import org.json.JSONObject;
-
-import retrofit2.Call;
-import retrofit2.Callback;
-
-import static com.bytecodr.invoicing.App.SERVER_KEY_HASH;
-import static com.bytecodr.invoicing.App.getApis;
+import io.realm.Realm;
+import io.realm.Sort;
 
 public class NewDescriptionActivity extends AppCompatActivity {
     public static final String TAG = "NewItemActivity";
-    private MaterialDialog progressDialog;
-    private JSONObject api_parameter;
 
     private String userId;
     private Description description;
@@ -46,8 +38,7 @@ public class NewDescriptionActivity extends AppCompatActivity {
         SharedPreferences settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
 
         //Means user is not logged in
-        if (settings == null || settings.getInt("logged_in", 0) == 0 || settings.getString("api_key", "").equals(""))
-        {
+        if (settings == null || settings.getInt("logged_in", 0) == 0 || settings.getString("api_key", "").equals("")) {
             Intent intent = new Intent(this, LoginActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
@@ -57,26 +48,17 @@ public class NewDescriptionActivity extends AppCompatActivity {
 
         userId = String.valueOf(settings.getInt("id", -1));
 
-        progressDialog = new MaterialDialog.Builder(this)
-                .title(R.string.progress_dialog)
-                .content(R.string.please_wait)
-                .cancelable(false)
-                .progress(true, 0).build();
-
-        etTitle = (EditText)findViewById(R.id.etTitle);
-        etDescription = (EditText)findViewById(R.id.etDescription);
+        etTitle = (EditText) findViewById(R.id.etTitle);
+        etDescription = (EditText) findViewById(R.id.etDescription);
 
         description = getIntent().getParcelableExtra("data");
 
-        if (description != null && !userId.equals("-1"))
-        {
+        if (description != null && !userId.equals("-1")) {
             etTitle.setText(description.title);
             etDescription.setText(description.description);
 
             toolbar.setTitle(description.title);
-        }
-        else
-        {
+        } else {
             toolbar.setTitle(getResources().getString(R.string.title_activity_new_item));
         }
 
@@ -90,11 +72,9 @@ public class NewDescriptionActivity extends AppCompatActivity {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_new_item, menu);
 
-        if (description != null)
-        {
+        if (description != null) {
             MenuItem item = menu.findItem(R.id.action_delete);
-            if (item != null)
-            {
+            if (item != null) {
                 item.setVisible(true);
             }
         }
@@ -110,24 +90,47 @@ public class NewDescriptionActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_save)
-        {
-            if (isFormValid())
-            {
-                if (description==null) {
-                    create(etTitle.getText().toString(), etDescription.getText().toString());
+        if (id == R.id.action_save) {
+            if (isFormValid()) {
+                if (description == null) {
+                    try (Realm realm = Realm.getDefaultInstance()) {
+                        Description description1 = new Description();
+
+                        Description description2 = realm.where(Description.class).sort("id", Sort.ASCENDING).findFirst();
+                        if (description2 == null || description2.id > -1)
+                            description1.id = -1;
+                        else
+                            description1.id = description2.id - 1;
+                        description1.title = etTitle.getText().toString();
+                        description1.description = etDescription.getText().toString();
+                        description1.pendingUpdate = true;
+
+                        realm.executeTransaction(realm12 -> realm12.insertOrUpdate(description1));
+                    }
                 } else {
-                    update(description.id,etTitle.getText().toString(), etDescription.getText().toString());
+                    try (Realm realm = Realm.getDefaultInstance()) {
+                        Description description1 = realm.where(Description.class).equalTo("id", description.id).findFirst();
+                        if (description1 != null) {
+                            realm.executeTransaction(realm1 -> {
+                                description1.title = etTitle.getText().toString();
+                                description1.description = etDescription.getText().toString();
+                                description1.pendingUpdate = true;
+                                realm1.insertOrUpdate(description1);
+                            });
+                            App.getInstance().updateData();
+                        }
+                    }
                 }
+                Intent intent = new Intent(NewDescriptionActivity.this, MainActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                intent.putExtra("tab", "descriptions");
+                startActivity(intent);
+                finish();
                 return true;
-            }
-            else
-            {
+            } else {
                 return false;
             }
-        }
-        else if (id == R.id.action_delete)
-        {
+        } else if (id == R.id.action_delete) {
             new MaterialDialog.Builder(this)
                     .title(R.string.delete)
                     .content(R.string.delete_item)
@@ -136,193 +139,67 @@ public class NewDescriptionActivity extends AppCompatActivity {
                     .cancelable(false)
                     .negativeColorRes(R.color.colorAccent)
                     .positiveColorRes(R.color.colorAccent)
-                    .callback(new MaterialDialog.ButtonCallback()
-                    {
+                    .callback(new MaterialDialog.ButtonCallback() {
                         @Override
-                        public void onPositive(MaterialDialog dialog)
-                        {
-                            delete(description.id);
+                        public void onPositive(MaterialDialog dialog) {
+                            try (Realm realm = Realm.getDefaultInstance()) {
+                                Description description1 = realm.where(Description.class).equalTo("id", description.id).findFirst();
+                                if (description1 != null) {
+                                    realm.executeTransaction(realm1 -> {
+                                        description1.pendingDelete = true;
+                                        realm1.insertOrUpdate(description1);
+                                    });
+                                    App.getInstance().updateData();
+                                }
+
+                                Intent intent = new Intent(NewDescriptionActivity.this, MainActivity.class);
+                                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                intent.putExtra("tab", "descriptions");
+                                startActivity(intent);
+                                finish();
+                            }
                         }
 
                         @Override
-                        public void onNegative(MaterialDialog dialog)
-                        {
+                        public void onNegative(MaterialDialog dialog) {
                             //Cancel
                             dialog.dismiss();
 
-                            if (dialog != null && dialog.isShowing())
-                            {
+                            if (dialog != null && dialog.isShowing()) {
                                 // If the response is JSONObject instead of expected JSONArray
                                 dialog.dismiss();
                             }
                         }
                     })
                     .show();
-        }
-        else if (id == android.R.id.home) //Handles the back button, to make sure items fragment is preselected
+        } else if (id == android.R.id.home) //Handles the back button, to make sure items fragment is preselected
         {
-            goToHome();
+            Intent intent = new Intent(NewDescriptionActivity.this, MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.putExtra("tab", "descriptions");
+            startActivity(intent);
+            finish();
         }
 
         return super.onOptionsItemSelected(item);
     }
 
-    private void goToHome() {
-        Intent intent = new Intent(NewDescriptionActivity.this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-        intent.putExtra("tab", "descriptions");
-        startActivity(intent);
-        finish();
-    }
-
     public boolean isFormValid() {
 
-        if (etTitle.getText().toString().trim().length() == 0){
+        if (etTitle.getText().toString().trim().length() == 0) {
             etTitle.setError("Title required");
             return false;
-        }
-        else
-        {
+        } else {
             etTitle.setError(null);
         }
 
-        if (etDescription.getText().toString().trim().length() == 0){
+        if (etDescription.getText().toString().trim().length() == 0) {
             etDescription.setError("Description required");
             return false;
-        }
-        else
-        {
+        } else {
             etDescription.setError(null);
         }
 
         return true;
-    }
-
-    public void create(String title, String description){
-        progressDialog.show();
-        getApis().addDescription(SERVER_KEY_HASH, userId, title, description).enqueue(new Callback<JsonObject>() {
-            @Override
-            public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
-                if (response.isSuccessful()) {
-                    JsonObject responseJo = response.body();
-                    String status = responseJo.get("status").getAsString();
-                    if (status.equals("true")) {
-                        dismissProgress();
-                        goToHome();
-                    } else {
-                        dismissProgress();
-                        failedToAdd();
-                    }
-
-                } else {
-                    dismissProgress();
-                    failedToAdd();
-                }
-            }
-
-            @Override
-            public void onFailure(Call<JsonObject> call, Throwable t) {
-                dismissProgress();
-                failedToAdd();
-            }
-        });
-    }
-
-    public void update(String descriptionId, String title, String description){
-        progressDialog.show();
-        getApis().updateDescription(SERVER_KEY_HASH, userId, descriptionId, title, description).enqueue(new Callback<JsonObject>() {
-            @Override
-            public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
-                if (response.isSuccessful()) {
-                    JsonObject responseJo = response.body();
-                    String status = responseJo.get("status").getAsString();
-                    if (status.equals("true")) {
-                        dismissProgress();
-                        goToHome();
-                    } else {
-                        dismissProgress();
-                        failedToUpdate();
-                    }
-
-                } else {
-                    dismissProgress();
-                    failedToUpdate();
-                }
-            }
-
-            @Override
-            public void onFailure(Call<JsonObject> call, Throwable t) {
-                dismissProgress();
-                failedToUpdate();
-            }
-        });
-    }
-
-    private void delete(String descriptionId) {
-        progressDialog.show();
-        getApis().deleteDescription(SERVER_KEY_HASH, userId, descriptionId).enqueue(new Callback<JsonObject>() {
-            @Override
-            public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
-                if (response.isSuccessful()) {
-                    JsonObject responseJo = response.body();
-                    String status = responseJo.get("status").getAsString();
-                    if (status.equals("true")) {
-                        dismissProgress();
-                        goToHome();
-                    } else {
-                        dismissProgress();
-                        failedToDelete();
-                    }
-
-                } else {
-                    dismissProgress();
-                    failedToDelete();
-                }
-            }
-
-            @Override
-            public void onFailure(Call<JsonObject> call, Throwable t) {
-                dismissProgress();
-                failedToDelete();
-            }
-        });
-    }
-
-    private void dismissProgress() {
-        try {
-            if (progressDialog != null && progressDialog.isShowing()) {
-                // If the response is JSONObject instead of expected JSONArray
-                progressDialog.dismiss();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void failedToAdd() {
-        try {
-            Toast.makeText(this, "Failed to add", Toast.LENGTH_SHORT).show();
-            finish();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void failedToUpdate() {
-        try {
-            Toast.makeText(this, "Failed to update", Toast.LENGTH_SHORT).show();
-            finish();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void failedToDelete() {
-        try {
-            Toast.makeText(this, "Failed to delete", Toast.LENGTH_SHORT).show();
-            finish();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 }

@@ -30,6 +30,9 @@ public class Estimate extends RealmObject implements Serializable {
     public double TaxRate;
     public double TotalMoney;
 
+    public boolean pendingUpdate = false;
+    public boolean pendingDelete = false;
+
     public String getEstimateName()
     {
         return "EST-" + getEstimateNumberFormatted();

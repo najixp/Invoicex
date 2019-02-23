@@ -33,21 +33,15 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.NetworkResponse;
-import com.android.volley.Request;
-import com.android.volley.VolleyLog;
-import com.android.volley.toolbox.JsonObjectRequest;
 import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.BuildConfig;
 import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.helper.helper_number;
-import com.bytecodr.invoicing.helper.helper_string;
 import com.bytecodr.invoicing.model.Client;
 import com.bytecodr.invoicing.model.Invoice;
-import com.bytecodr.invoicing.model.Item;
-import com.bytecodr.invoicing.network.Network;
-import com.google.gson.Gson;
+import com.bytecodr.invoicing.model.InvoiceItem;
+import com.bytecodr.invoicing.model.StringPreference;
 import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
@@ -66,10 +60,6 @@ import com.rey.material.widget.Spinner;
 import com.rey.material.widget.Switch;
 import com.wdullaer.materialdatetimepicker.date.DatePickerDialog;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -78,8 +68,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
+
+import io.realm.Realm;
+import io.realm.Sort;
 
 import static com.bytecodr.invoicing.main.LoginActivity.SESSION_USER;
 import static com.itextpdf.text.pdf.ColumnText.AR_LIG;
@@ -95,14 +87,10 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
     private static final int SIZE_TEXT_TOTAL = 14;
     private static final int SIZE_TEXT_NORMAL = 14;
 
-    private MaterialDialog progressDialog;
-    private JSONObject api_parameter;
-
     private Invoice currentInvoice;
     private Client currentClient;
 
     private ArrayList<Client> array_list_clients;
-    private String[] array_clients;
     Spinner spinner_client;
 
     private EditText edit_invoice_number;
@@ -119,8 +107,8 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
 
     private Switch switch_payment_received;
 
-    private ArrayList<Item> array_list_items_from_intent;
-    private ArrayList<Item> array_list_items;
+    private ArrayList<InvoiceItem> array_list_items_from_intent;
+    private ArrayList<InvoiceItem> array_list_items;
     private InvoiceItemAdapter adapter_item;
     private ListView list_items;
 
@@ -133,15 +121,11 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
     /**
      * INVOICE SETUP
      **/
-    private String logoImage;
     private BaseFont bfBold;
     private BaseFont bf;
     private int pageNumber = 0;
     private double Subtotal;
     private double Tax;
-
-    private Date invoiceDate = null;
-    private Date invoiceDueDate = null;
 
     private SharedPreferences settings;
 
@@ -191,12 +175,6 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
 
         currency = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
 
-        progressDialog = new MaterialDialog.Builder(this)
-                .title(R.string.progress_dialog)
-                .content(R.string.please_wait)
-                .cancelable(false)
-                .progress(true, 0).build();
-
         edit_invoice_number = (EditText) findViewById(R.id.edit_invoice_number);
         edit_tax_rate = (EditText) findViewById(R.id.edit_tax_rate);
         edit_client_notes = (EditText) findViewById(R.id.edit_client_notes);
@@ -226,7 +204,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         datePicker.vibrate(false);
 
         currentInvoice = (Invoice) getIntent().getSerializableExtra("data");
-        array_list_items_from_intent = (ArrayList<Item>) getIntent().getSerializableExtra("items");
+        array_list_items_from_intent = (ArrayList<InvoiceItem>) getIntent().getSerializableExtra("items");
 
         currentClient = new Client();
 
@@ -260,8 +238,8 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         list_items.setAdapter(adapter_item);
         list_items.setOnItemClickListener((arg0, arg1, position, arg3) -> {
 
-            Item item = array_list_items.get(position);
-            Intent intent = new Intent(NewInvoiceActivity.this, ItemPickerActivity.class);
+            InvoiceItem item = array_list_items.get(position);
+            Intent intent = new Intent(NewInvoiceActivity.this, InvoiceItemPickerActivity.class);
             intent.putExtra("data", item);
             intent.putExtra("position", position);
             startActivityForResult(intent, ITEM_PICKER_TAG);
@@ -296,7 +274,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.add_item_button);
         fab.setOnClickListener(view -> {
-            Intent intent = new Intent(NewInvoiceActivity.this, ItemPickerActivity.class);
+            Intent intent = new Intent(NewInvoiceActivity.this, InvoiceItemPickerActivity.class);
             startActivityForResult(intent, ITEM_PICKER_TAG);
         });
 
@@ -322,26 +300,43 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         AdRequest adRequest = new AdRequest.Builder().build();
         mAdView.loadAd(adRequest);*/
 
-        api_parameter = new JSONObject();
-
-        try {
-            api_parameter.put("user_id", settings.getInt("id", 0));
-            api_parameter.put("include_logo", 1);
-
-            if (currentInvoice != null && currentInvoice.Id > 0) {
-                api_parameter.put("include_invoice_lines", currentInvoice.Id);
-            } else {
-                api_parameter.put("include_invoice_number", 1);
-            }
-        } catch (JSONException ex) {
-        }
-
         setSupportActionBar(toolbar);
 
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setHomeButtonEnabled(true);
 
-        RunGetClientService();
+        try (Realm realm = Realm.getDefaultInstance()) {
+            List<Client> clients = realm.copyFromRealm(realm.where(Client.class).equalTo("pendingDelete", false).greaterThan("Id", 0).findAll());
+
+            array_list_clients.clear();
+            List<String> array_clients = new ArrayList<>();
+
+            Integer selected_client_index = 0;
+
+            for (int i = 0; i < clients.size(); i++) {
+                Client client = clients.get(i);
+                array_list_clients.add(client);
+                array_clients.add(client.Name);
+
+                if (currentInvoice != null && currentInvoice.Id > 0 && currentInvoice.ClientId == client.Id) {
+                    selected_client_index = i;
+                    currentClient = client;
+                }
+            }
+
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(NewInvoiceActivity.this, R.layout.custom_simple_spinner_item, array_clients);
+            spinner_client.setAdapter(adapter);
+            spinner_client.setSelection(selected_client_index);
+
+            if (currentInvoice != null)
+                array_list_items.addAll(realm.copyFromRealm(realm.where(InvoiceItem.class).equalTo("InvoiceId", currentInvoice.Id).findAll()));
+
+            if (array_list_items_from_intent != null)
+                array_list_items.addAll(array_list_items_from_intent);
+
+            calculate_total();
+            setListViewHeightBasedOnChildren(list_items);
+        }
 
         if (currentInvoice == null) {
             final SharedPreferences preference = getSharedPreferences(SESSION_USER, MODE_PRIVATE);
@@ -387,27 +382,31 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_save) {
             if (isFormValid()) {
-                SharedPreferences settings = getSharedPreferences(SESSION_USER, MODE_PRIVATE);
+                if (isInvoiceFormValid()) {
+                    try (Realm realm = Realm.getDefaultInstance()) {
+                        Invoice invoice = new Invoice();
 
-                try {
-                    if (isInvoiceFormValid()) {
-                        api_parameter = new JSONObject();
-                        api_parameter.put("user_id", settings.getInt("id", 0));
+                        String Id = edit_invoice_number.getTag().toString();
+                        if (Id.equals("0")) {
+                            Invoice invoice1 = realm.where(Invoice.class).sort("Id", Sort.ASCENDING).findFirst();
+                            if (invoice1 == null || invoice1.Id > -1)
+                                invoice.Id = -1;
+                            else
+                                invoice.Id = invoice1.Id - 1;
+                        } else
+                            invoice.Id = Long.valueOf(Id);
 
-                        Object itemId = edit_invoice_number.getTag();
-
-                        if (!itemId.equals("0")) {
-                            api_parameter.put("id", itemId.toString());
+                        try {
+                            invoice.InvoiceNumber = Long.valueOf(edit_invoice_number.getText().toString().trim());
+                        } catch (NumberFormatException e) {
                         }
-
-                        api_parameter.put("invoice_number", edit_invoice_number.getText()
-                                .toString().trim());
-                        api_parameter.put("tax_rate", edit_tax_rate.getText().toString().trim());
-                        api_parameter.put("client_id", array_list_clients.get(spinner_client
-                                .getSelectedItemPosition()).Id);
-                        api_parameter.put("notes", edit_client_notes.getText().toString().trim());
-                        api_parameter.put("paid", (switch_payment_received.isChecked() ? 1 : 0));
-
+                        try {
+                            invoice.TaxRate = Double.valueOf(edit_tax_rate.getText().toString().trim());
+                        } catch (NumberFormatException e) {
+                        }
+                        invoice.ClientId = array_list_clients.get(spinner_client.getSelectedItemPosition()).Id;
+                        invoice.ClientNote = edit_client_notes.getText().toString().trim();
+                        invoice.IsPaid = switch_payment_received.isChecked();
 
                         String invoiceDateString = edit_invoice_date.getText().toString().trim();
                         String invoiceDueDateString = edit_invoice_due_date.getText().toString()
@@ -415,29 +414,62 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
 
                         SimpleDateFormat sdf = new SimpleDateFormat("dd. MMM yyyy");
 
+                        Date invoiceDate = null;
+                        Date invoiceDueDate = null;
 
                         try {
                             invoiceDate = sdf.parse(invoiceDateString);
                             invoiceDueDate = sdf.parse(invoiceDueDateString);
-
                         } catch (ParseException e) {
-
                         }
 
-                        api_parameter.put("invoice_date", (invoiceDate != null ? (invoiceDate
-                                .getTime() / 1000) : null));
-                        api_parameter.put("due_date", (invoiceDueDate != null ? (invoiceDueDate
-                                .getTime() / 1000) : null));
+                        if (invoiceDate != null)
+                            invoice.InvoiceDate = ((int) invoiceDate.getTime() / 1000);
+                        if (invoiceDueDate != null)
+                            invoice.InvoiceDueDate = ((int) invoiceDueDate.getTime() / 1000);
+                        invoice.pendingUpdate = true;
 
-                        Gson json = new Gson();
+                        realm.executeTransaction(realm1 -> {
+                            realm1.insertOrUpdate(invoice);
+                            if (currentInvoice != null) {
+                                List<InvoiceItem> dbItems = realm1.where(InvoiceItem.class).equalTo("InvoiceId", invoice.Id).findAll();
+                                for (InvoiceItem dbItem : dbItems) {
+                                    boolean found = false;
+                                    for (InvoiceItem listItem : array_list_items) {
+                                        if (listItem.Id == dbItem.Id) {
+                                            realm1.insertOrUpdate(listItem);
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!found) {
+                                        dbItem.pendingDelete = true;
+                                        realm1.insertOrUpdate(dbItem);
+                                    }
+                                }
+                                for (InvoiceItem listItem : array_list_items) {
+                                    boolean found = false;
+                                    for (InvoiceItem dbItem : dbItems) {
+                                        if (listItem.Id == dbItem.Id) {
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!found)
+                                        realm1.insertOrUpdate(listItem);
+                                }
+                            } else
+                                realm1.insertOrUpdate(array_list_items);
+                        });
 
-                        api_parameter.put("items", json.toJson(array_list_items));
+                        App.getInstance().updateData();
 
-                        RunCreateInvoiceService();
+                        Intent intent = new Intent(NewInvoiceActivity.this, MainActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        intent.putExtra("tab", "invoices");
+                        startActivity(intent);
+                        finish();
                     }
-                } catch (JSONException ex) {
-                    Toast.makeText(NewInvoiceActivity.this, ex.getMessage(), Toast.LENGTH_LONG)
-                            .show();
                 }
 
                 return true;
@@ -457,21 +489,24 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                         @Override
                         public void onPositive(MaterialDialog dialog) {
                             //Delete
-                            SharedPreferences settings = getSharedPreferences(SESSION_USER,
-                                    MODE_PRIVATE);
-
                             Object id = edit_invoice_number.getTag();
 
                             if (!id.equals("0")) {
-                                try {
-                                    api_parameter = new JSONObject();
-                                    api_parameter.put("id", id.toString());
-                                    api_parameter.put("user_id", settings.getInt("id", 0));
+                                try (Realm realm = Realm.getDefaultInstance()) {
+                                    Invoice invoice = realm.where(Invoice.class).equalTo("Id", Long.valueOf(id.toString())).findFirst();
+                                    if (invoice != null) {
+                                        realm.executeTransaction(realm1 -> {
+                                            invoice.pendingDelete = true;
+                                            realm1.insertOrUpdate(invoice);
+                                        });
+                                        App.getInstance().updateData();
+                                    }
 
-                                    RunDeleteInvoiceService();
-                                } catch (JSONException ex) {
-                                    Toast.makeText(NewInvoiceActivity.this, ex.getMessage(),
-                                            Toast.LENGTH_LONG).show();
+                                    Intent intent = new Intent(NewInvoiceActivity.this, MainActivity.class);
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    intent.putExtra("tab", "invoices");
+                                    startActivity(intent);
+                                    finish();
                                 }
                             }
                         }
@@ -525,7 +560,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
             // currentInvoice.getInvoiceName() + ".\n\n" + "Kind Regards" + "\n\n" + settings
             // .getString("firstname", "") + " " + settings.getString("lastname", ""));
             emailIntent.setType("text/plain");
-            Uri uri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".provider",  new File(path));
+            Uri uri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".provider", new File(path));
             emailIntent.putExtra(Intent.EXTRA_STREAM, uri);
             startActivity(Intent.createChooser(emailIntent, "Send Email"));
         } else if (id == android.R.id.home) //Handles the back button, to make sure clients
@@ -572,16 +607,19 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         if (requestCode == ITEM_PICKER_TAG) {
             // Make sure the request was successful
             if (resultCode == RESULT_OK) {
-                Item item = (Item) data.getSerializableExtra("data");
+                InvoiceItem item = (InvoiceItem) data.getSerializableExtra("data");
+                item.InvoiceId = currentInvoice.Id;
+                item.pendingUpdate = true;
 
                 Integer position = data.getIntExtra("position", -1);
 
                 if (position > -1) {
-                    Item existingItem = array_list_items.get(position);
+                    InvoiceItem existingItem = array_list_items.get(position);
                     existingItem.Name = item.Name;
                     existingItem.Description = item.Description;
                     existingItem.Rate = item.Rate;
                     existingItem.Quantity = item.Quantity;
+                    existingItem.pendingUpdate = true;
                 } else {
                     array_list_items.add(item);
                 }
@@ -608,152 +646,6 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                     (monthOfYear) + " " + year);
     }
 
-    public void RunGetClientService() {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "clients/get", api_parameter, response -> {
-                    try {
-                        JSONObject result = ((JSONObject) response.get("data"));
-                        JSONArray clients = (JSONArray) result.get("clients");
-                        JSONArray invoice_lines = (JSONArray) result.get
-                                ("invoice_lines");
-
-                        Integer invoice_number = helper_string.optInt(result,
-                                "invoice_number");
-
-                        logoImage = helper_string.optString(result, "logo");
-
-                        if (invoice_number > 0) {
-                            edit_invoice_number.setText(String.format("%04d",
-                                    invoice_number));
-                            toolbar.setTitle(String.format("INV-%04d", invoice_number));
-                        }
-
-                        array_list_clients.clear();
-                        array_clients = new String[clients.length()];
-
-                        Integer selected_client_index = 0;
-
-                        if (clients.length() > 0) {
-                            for (int i = 0; i < clients.length(); i++) {
-                                JSONObject obj = clients.getJSONObject(i);
-
-                                Client client = new Client();
-
-                                client.Id = obj.optInt("id");
-                                client.UserId = obj.optInt("user_id");
-                                client.Name = helper_string.optString(obj, "name");
-                                client.Email = helper_string.optString(obj, "email");
-                                client.Address1 = helper_string.optString(obj,
-                                        "address1");
-                                client.Address2 = helper_string.optString(obj,
-                                        "address2");
-                                client.City = helper_string.optString(obj, "city");
-                                client.State = helper_string.optString(obj, "state");
-                                client.Postcode = helper_string.optString(obj,
-                                        "postcode");
-                                client.Country = helper_string.optString(obj,
-                                        "country");
-
-                                Log.e("CLIENT NAME>>>>>>", client.Name);
-
-                                array_list_clients.add(client);
-                                array_clients[i] = client.Name;
-
-                                if (currentInvoice != null && currentInvoice.ClientId ==
-                                        client.Id) {
-                                    selected_client_index = i;
-                                    currentClient = client;
-                                }
-
-                        /*if (obj.optInt("invoice_number") > 0)
-                            invoice_number = obj.optInt("invoice_number");*/
-                            }
-
-                            ArrayAdapter<String> adapter = new ArrayAdapter<>
-                                    (NewInvoiceActivity.this, R.layout
-                                            .custom_simple_spinner_item, array_clients);
-                            spinner_client.setAdapter(adapter);
-                            spinner_client.setSelection(selected_client_index);
-                        }
-
-                        if (invoice_lines.length() > 0) {
-                            for (int i = 0; i < invoice_lines.length(); i++) {
-                                JSONObject obj = invoice_lines.getJSONObject(i);
-
-                                Item item = new Item();
-                                item.Id = obj.optInt("id");
-                                item.Quantity = obj.optDouble("quantity");
-                                item.Name = helper_string.optString(obj, "name");
-                                item.Rate = obj.optDouble("rate");
-                                item.Description = helper_string.optString(obj,
-                                        "description");
-
-                                array_list_items.add(item);
-                            }
-
-                            calculate_total();
-                            setListViewHeightBasedOnChildren(list_items);
-                        }
-
-                        if (array_list_items_from_intent != null &&
-                                array_list_items_from_intent.size() > 0) {
-                            for (int i = 0; i < array_list_items_from_intent.size();
-                                 i++) {
-                                array_list_items.add(array_list_items_from_intent.get
-                                        (i));
-                            }
-
-                            calculate_total();
-                            setListViewHeightBasedOnChildren(list_items);
-                        }
-                    } catch (Exception ex) {
-                        Toast.makeText(NewInvoiceActivity.this, R.string
-                                .error_try_again_support, Toast.LENGTH_LONG).show();
-                    }
-
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewInvoiceActivity.this, json.has("message") ?
-                                            json.getString("message") : json.getString("error"),
-                                    Toast.LENGTH_LONG).show();
-                        } catch (JSONException ex) {
-                            Toast.makeText(NewInvoiceActivity.this, R.string
-                                    .error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewInvoiceActivity.this, error != null && error
-                                        .getMessage() != null ? error.getMessage() : error
-                                        .toString()
-                                , Toast.LENGTH_LONG).show();
-                    }
-                }) {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
-    }
-
     public boolean isFormValid() {
         boolean isValid = true;
 
@@ -777,7 +669,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         double subtotal = 0;
 
         for (int i = 0; i < array_list_items.size(); i++) {
-            Item item = array_list_items.get(i);
+            InvoiceItem item = array_list_items.get(i);
 
             subtotal = subtotal + (item.Rate * item.Quantity);
         }
@@ -822,12 +714,12 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         listView.requestLayout();
     }
 
-    public class InvoiceItemAdapter extends ArrayAdapter<Item> {
+    public class InvoiceItemAdapter extends ArrayAdapter<InvoiceItem> {
         private final Context context;
-        private final ArrayList<Item> values;
+        private final ArrayList<InvoiceItem> values;
         private String currency;
 
-        public InvoiceItemAdapter(Context context, ArrayList<Item> values) {
+        public InvoiceItemAdapter(Context context, ArrayList<InvoiceItem> values) {
             super(context, R.layout.layout_invoice_item_row, values);
 
             this.context = context;
@@ -837,7 +729,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
             currency = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
         }
 
-        public Item getItem(int position) {
+        public InvoiceItem getItem(int position) {
             return values.get(position);
         }
 
@@ -852,7 +744,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
 
             View rowView = inflater.inflate(R.layout.layout_invoice_item_row, parent, false);
 
-            Item item = values.get(position);
+            InvoiceItem item = values.get(position);
 
             TextView text_name = (TextView) rowView.findViewById(R.id.text_name);
             TextView text_rate = (TextView) rowView.findViewById(R.id.text_rate);
@@ -1104,16 +996,19 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                     .invoice_capitalized), SIZE_TEXT_TITLE_PAGE, bf, BaseColor.BLACK, Element
                     .ALIGN_RIGHT);
 
-            if (!logoImage.isEmpty()) {
-                Image image = Image.getInstance(Base64.decode(logoImage, Base64.DEFAULT));
-                float width = image.getScaledWidth();
-                float height = image.getScaledHeight();
-                image.setAlignment(Element.ALIGN_RIGHT);
-                image.setAbsolutePosition(410 + (180 - width), address1_start - height + 10);
-                cb.addImage(image);
+            try (Realm realm = Realm.getDefaultInstance()) {
+                StringPreference logoPreference = realm.where(StringPreference.class).equalTo("name", "logoImage").findFirst();
+                if (logoPreference != null && !logoPreference.value.isEmpty()) {
+                    Image image = Image.getInstance(Base64.decode(logoPreference.value, Base64.DEFAULT));
+                    float width = image.getScaledWidth();
+                    float height = image.getScaledHeight();
+                    image.setAlignment(Element.ALIGN_RIGHT);
+                    image.setAbsolutePosition(410 + (180 - width), address1_start - height + 10);
+                    cb.addImage(image);
+                }
             }
 
-            createText(cb, 460, address2_start, "#" + getResources().getString(R.string.invoice) , SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
+            createText(cb, 460, address2_start, "#" + getResources().getString(R.string.invoice), SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
             createText(cb, 580, address2_start, currentInvoice.getInvoiceNumberFormatted() + "",
                     SIZE_TEXT_HEADER_PAGE, bf, BaseColor.BLACK, Element.ALIGN_RIGHT);
 
@@ -1141,7 +1036,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
     }
 
     private void generateDetail(Document doc, PdfContentByte cb, int index, int y) {
-        Item item = array_list_items.get(index);
+        InvoiceItem item = array_list_items.get(index);
 
         if (item == null) return;
 
@@ -1186,7 +1081,7 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         fnt.setColor(color);
         Phrase phrase = new Phrase(text, fnt);
 
-        ColumnText.showTextAligned(cb, alignment, phrase, x, y, 0, PdfWriter.RUN_DIRECTION_RTL,AR_LIG);
+        ColumnText.showTextAligned(cb, alignment, phrase, x, y, 0, PdfWriter.RUN_DIRECTION_RTL, AR_LIG);
 
     }
 
@@ -1212,145 +1107,13 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
     private void initializeFonts() {
         try {
 
-            bfBold = BaseFont.createFont("res/font/tradbdo.ttf", BaseFont.IDENTITY_H,BaseFont.EMBEDDED);
-            bf = BaseFont.createFont("res/font/trado.ttf", BaseFont.IDENTITY_H,BaseFont.EMBEDDED);
+            bfBold = BaseFont.createFont("res/font/tradbdo.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+            bf = BaseFont.createFont("res/font/trado.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
 
         } catch (DocumentException ex) {
             //ex.printStackTrace();
         } catch (IOException ex) {
             //ex.printStackTrace();
         }
-    }
-
-    public void RunCreateInvoiceService() {
-        progressDialog.show();
-        VolleyLog.d("invoices/create", api_parameter.toString());
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "invoices/create", api_parameter, response -> {
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    Log.e("RESPONSE1", response.toString());
-
-                    try {
-
-                        JSONObject obj = response.getJSONObject("invoice_ret");
-                        Invoice invoice = new Invoice();
-
-                        invoice.Id = obj.optInt("id");
-                        invoice.UserId = obj.optInt("user_id");
-                        invoice.InvoiceNumber = obj.getInt("invoice_number");
-                        invoice.TaxRate = obj.getDouble("tax_rate");
-                        invoice.ClientName = helper_string.optString(response, "client_ret");
-                        invoice.ClientId = obj.getInt("client_id");
-                        invoice.ClientNote = helper_string.optString(obj, "notes");
-                        invoice.InvoiceDate = obj.optInt("invoice_date", 0);
-                        invoice.InvoiceDueDate = obj.optInt("due_date", 0);
-                        invoice.TotalMoney = response.optDouble("invoice_total");
-                        invoice.IsPaid = (obj.getInt("is_paid") == 1);
-                        invoice.Created = obj.optInt("created_on", 0);
-                        invoice.Updated = obj.optInt("updated_on", 0);
-
-                        Intent intent = new Intent(NewInvoiceActivity.this, NewInvoiceActivity.class);
-                        intent.putExtra("data", invoice);
-                        startActivity(intent);
-                        finish();
-
-
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
-
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewInvoiceActivity.this, json.has("message") ?
-                                            json.getString("message") : json.getString("error"),
-                                    Toast.LENGTH_LONG).show();
-                        } catch (JSONException ex) {
-                            Toast.makeText(NewInvoiceActivity.this, R.string
-                                    .error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewInvoiceActivity.this, error != null && error
-                                        .getMessage() != null ? error.getMessage() : error
-                                        .toString()
-                                , Toast.LENGTH_LONG).show();
-                    }
-                }) {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
-    }
-
-    public void RunDeleteInvoiceService() {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "invoices/delete", api_parameter, response -> {
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    Intent intent = new Intent(NewInvoiceActivity.this, MainActivity
-                            .class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent
-                            .FLAG_ACTIVITY_NEW_TASK);
-                    intent.putExtra("tab", "invoices");
-                    startActivity(intent);
-                    finish();
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewInvoiceActivity.this, json.has("message") ?
-                                            json.getString("message") : json.getString("error"),
-                                    Toast.LENGTH_LONG).show();
-                        } catch (JSONException ex) {
-                            Toast.makeText(NewInvoiceActivity.this, R.string
-                                    .error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewInvoiceActivity.this, error != null && error
-                                        .getMessage() != null ? error.getMessage() : error.toString()
-                                , Toast.LENGTH_LONG).show();
-                    }
-                }) {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
     }
 }

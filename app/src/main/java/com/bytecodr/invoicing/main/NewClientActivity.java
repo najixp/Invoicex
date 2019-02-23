@@ -8,28 +8,17 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
-import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.android.volley.NetworkResponse;
-import com.android.volley.Request;
-import com.android.volley.toolbox.JsonObjectRequest;
 import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Client;
-import com.bytecodr.invoicing.network.Network;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import io.realm.Realm;
+import io.realm.Sort;
 
-import java.util.HashMap;
-import java.util.Map;
-
-public class NewClientActivity extends AppCompatActivity
-{
+public class NewClientActivity extends AppCompatActivity {
     public static final String TAG = "NewClientActivity";
-    private MaterialDialog progressDialog;
-    private JSONObject api_parameter;
 
     private Client currentItem;
 
@@ -43,8 +32,7 @@ public class NewClientActivity extends AppCompatActivity
     private EditText edit_country;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState)
-    {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_new_client);
 
@@ -55,8 +43,7 @@ public class NewClientActivity extends AppCompatActivity
         SharedPreferences settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
 
         //Means user is not logged in
-        if (settings == null || settings.getInt("logged_in", 0) == 0 || settings.getString("api_key", "").equals(""))
-        {
+        if (settings == null || settings.getInt("logged_in", 0) == 0 || settings.getString("api_key", "").equals("")) {
             Intent intent = new Intent(this, LoginActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
@@ -64,25 +51,18 @@ public class NewClientActivity extends AppCompatActivity
             return;
         }
 
-        progressDialog = new MaterialDialog.Builder(this)
-                .title(R.string.progress_dialog)
-                .content(R.string.please_wait)
-                .cancelable(false)
-                .progress(true, 0).build();
+        edit_name = (EditText) findViewById(R.id.edit_name);
+        edit_email = (EditText) findViewById(R.id.edit_email);
+        edit_address1 = (EditText) findViewById(R.id.edit_address1);
+        edit_address2 = (EditText) findViewById(R.id.edit_address2);
+        edit_city = (EditText) findViewById(R.id.edit_city);
+        edit_state = (EditText) findViewById(R.id.edit_state);
+        edit_postcode = (EditText) findViewById(R.id.edit_postcode);
+        edit_country = (EditText) findViewById(R.id.edit_country);
 
-        edit_name = (EditText)findViewById(R.id.edit_name);
-        edit_email = (EditText)findViewById(R.id.edit_email);
-        edit_address1 = (EditText)findViewById(R.id.edit_address1);
-        edit_address2 = (EditText)findViewById(R.id.edit_address2);
-        edit_city = (EditText)findViewById(R.id.edit_city);
-        edit_state = (EditText)findViewById(R.id.edit_state);
-        edit_postcode = (EditText)findViewById(R.id.edit_postcode);
-        edit_country = (EditText)findViewById(R.id.edit_country);
+        currentItem = (Client) getIntent().getSerializableExtra("data");
 
-        currentItem = (Client)getIntent().getSerializableExtra("data");
-
-        if (currentItem != null && currentItem.Id > 0)
-        {
+        if (currentItem != null && currentItem.Id > 0) {
             edit_name.setTag(currentItem.Id);
             edit_name.setText(currentItem.Name);
             edit_email.setText(currentItem.Email);
@@ -94,9 +74,7 @@ public class NewClientActivity extends AppCompatActivity
             edit_country.setText(currentItem.Country);
 
             toolbar.setTitle(currentItem.Name);
-        }
-        else
-        {
+        } else {
             toolbar.setTitle(getResources().getString(R.string.title_activity_new_client));
         }
 
@@ -106,16 +84,13 @@ public class NewClientActivity extends AppCompatActivity
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu)
-    {
+    public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_new_client, menu);
 
-        if (currentItem != null)
-        {
+        if (currentItem != null) {
             MenuItem item = menu.findItem(R.id.action_delete);
-            if (item != null)
-            {
+            if (item != null) {
                 item.setVisible(true);
             }
         }
@@ -124,57 +99,52 @@ public class NewClientActivity extends AppCompatActivity
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item)
-    {
+    public boolean onOptionsItemSelected(MenuItem item) {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_save)
-        {
-            if (isFormValid())
-            {
-                SharedPreferences settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
+        if (id == R.id.action_save) {
+            if (isFormValid()) {
+                try (Realm realm = Realm.getDefaultInstance()) {
+                    Client client = new Client();
 
-                try
-                {
-                    api_parameter = new JSONObject();
-                    api_parameter.put("user_id", settings.getInt("id", 0));
+                    String Id = edit_name.getTag().toString();
+                    if (Id.equals("0")) {
+                        Client client1 = realm.where(Client.class).sort("Id", Sort.ASCENDING).findFirst();
+                        if (client1 == null || client1.Id > -1)
+                            client.Id = -1;
+                        else
+                            client.Id = client1.Id - 1;
+                    } else
+                        client.Id = Long.valueOf(Id);
+                    client.Name = edit_name.getText().toString().trim();
+                    client.Email = edit_email.getText().toString().trim();
+                    client.Address1 = edit_address1.getText().toString().trim();
+                    client.Address2 = edit_address2.getText().toString().trim();
+                    client.City = edit_city.getText().toString().trim();
+                    client.State = edit_state.getText().toString().trim();
+                    client.Postcode = edit_postcode.getText().toString().trim();
+                    client.Country = edit_country.getText().toString().trim();
+                    client.pendingUpdate = true;
 
-                    Object itemId = edit_name.getTag();
+                    realm.executeTransaction(realm1 -> realm1.insertOrUpdate(client));
+                    App.getInstance().updateData();
 
-                    if (!itemId.equals("0"))
-                    {
-                        api_parameter.put("id", itemId.toString());
-                    }
-
-                    api_parameter.put("name", edit_name.getText().toString().trim());
-                    api_parameter.put("email", edit_email.getText().toString().trim());
-                    api_parameter.put("address1", edit_address1.getText().toString().trim());
-                    api_parameter.put("address2", edit_address2.getText().toString().trim());
-                    api_parameter.put("city", edit_city.getText().toString().trim());
-                    api_parameter.put("state", edit_state.getText().toString().trim());
-                    api_parameter.put("postcode", edit_postcode.getText().toString().trim());
-                    api_parameter.put("country", edit_country.getText().toString().trim());
-
-                    RunCreateClientService();
-                }
-                catch (JSONException ex)
-                {
-                    Toast.makeText(NewClientActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
+                    Intent intent = new Intent(NewClientActivity.this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    intent.putExtra("tab", "clients");
+                    startActivity(intent);
+                    finish();
                 }
 
                 return true;
-            }
-            else
-            {
+            } else {
                 return false;
             }
-        }
-        else if (id == R.id.action_delete)
-        {
+        } else if (id == R.id.action_delete) {
             new MaterialDialog.Builder(this)
                     .title(R.string.delete)
                     .content(R.string.delete_item)
@@ -183,49 +153,44 @@ public class NewClientActivity extends AppCompatActivity
                     .cancelable(false)
                     .negativeColorRes(R.color.colorAccent)
                     .positiveColorRes(R.color.colorAccent)
-                    .callback(new MaterialDialog.ButtonCallback()
-                    {
+                    .callback(new MaterialDialog.ButtonCallback() {
                         @Override
-                        public void onPositive(MaterialDialog dialog)
-                        {
-                            //Delete
-                            SharedPreferences settings = getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
-
+                        public void onPositive(MaterialDialog dialog) {
                             Object id = edit_name.getTag();
 
-                            if (!id.equals("0"))
-                            {
-                                try
-                                {
-                                    api_parameter = new JSONObject();
-                                    api_parameter.put("id", id.toString());
-                                    api_parameter.put("user_id", settings.getInt("id", 0));
+                            if (!id.equals("0")) {
+                                try (Realm realm = Realm.getDefaultInstance()) {
+                                    Client client = realm.where(Client.class).equalTo("Id", Long.valueOf(id.toString())).findFirst();
+                                    if (client != null) {
+                                        realm.executeTransaction(realm1 -> {
+                                            client.pendingDelete = true;
+                                            realm1.insertOrUpdate(client);
+                                        });
+                                        App.getInstance().updateData();
+                                    }
 
-                                    RunDeleteClientService();
-                                }
-                                catch (JSONException ex)
-                                {
-                                    Toast.makeText(NewClientActivity.this, ex.getMessage(), Toast.LENGTH_LONG).show();
+                                    Intent intent = new Intent(NewClientActivity.this, MainActivity.class);
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    intent.putExtra("tab", "clients");
+                                    startActivity(intent);
+                                    finish();
                                 }
                             }
                         }
 
                         @Override
-                        public void onNegative(MaterialDialog dialog)
-                        {
+                        public void onNegative(MaterialDialog dialog) {
                             //Cancel
                             dialog.dismiss();
 
-                            if (dialog != null && dialog.isShowing())
-                            {
+                            if (dialog != null && dialog.isShowing()) {
                                 // If the response is JSONObject instead of expected JSONArray
                                 dialog.dismiss();
                             }
                         }
                     })
                     .show();
-        }
-        else if (id == android.R.id.home) //Handles the back button, to make sure clients fragment is preselected
+        } else if (id == android.R.id.home) //Handles the back button, to make sure clients fragment is preselected
         {
             Intent intent = new Intent(NewClientActivity.this, MainActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -237,135 +202,29 @@ public class NewClientActivity extends AppCompatActivity
         return super.onOptionsItemSelected(item);
     }
 
-    public boolean isFormValid()
-    {
+    public boolean isFormValid() {
         boolean isValid = true;
 
-        if (edit_name.getText().toString().trim().length() == 0){
+        if (edit_name.getText().toString().trim().length() == 0) {
             edit_name.setError("Name required");
             isValid = false;
-        }
-        else
-        {
+        } else {
             edit_name.setError(null);
         }
 
         String email = edit_email.getText().toString().trim();
 
-        if (email.length() > 0)
-        {
-            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches())
-            {
+        if (email.length() > 0) {
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
                 edit_email.setError("Valid email required");
                 isValid = false;
-            }
-            else
-            {
+            } else {
                 edit_email.setError(null);
             }
-        }
-        else
-        {
+        } else {
             edit_email.setError(null);
         }
 
         return isValid;
     }
-
-    public void RunCreateClientService()
-    {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "clients/create", api_parameter, response -> {
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    Intent intent = new Intent(NewClientActivity.this, MainActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    intent.putExtra("tab", "clients");
-                    startActivity(intent);
-                    finish();
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewClientActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                        } catch (JSONException e) {
-                            Toast.makeText(NewClientActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewClientActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                    }
-                })
-        {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
-    }
-
-    public void RunDeleteClientService()
-    {
-        progressDialog.show();
-
-        JsonObjectRequest postRequest = new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "clients/delete", api_parameter, response -> {
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    Intent intent = new Intent(NewClientActivity.this, MainActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    intent.putExtra("tab", "clients");
-                    startActivity(intent);
-                    finish();
-                }, error -> {
-                    // TODO Auto-generated method stub
-                    if (progressDialog != null && progressDialog.isShowing()) {
-                        // If the response is JSONObject instead of expected JSONArray
-                        progressDialog.dismiss();
-                    }
-
-                    NetworkResponse response = error.networkResponse;
-                    if (response != null && response.data != null) {
-                        try {
-                            JSONObject json = new JSONObject(new String(response.data));
-                            Toast.makeText(NewClientActivity.this, json.has("message") ? json.getString("message") : json.getString("error"), Toast.LENGTH_LONG).show();
-                        } catch (JSONException e) {
-                            Toast.makeText(NewClientActivity.this, R.string.error_try_again_support, Toast.LENGTH_SHORT).show();
-                        }
-                    } else {
-                        Toast.makeText(NewClientActivity.this, error != null && error.getMessage() != null ? error.getMessage() : error.toString(), Toast.LENGTH_LONG).show();
-                    }
-                })
-        {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        };
-
-        App.getInstance().addToRequestQueue(postRequest);
-    }
-
 }
