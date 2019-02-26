@@ -19,6 +19,7 @@ import com.bytecodr.invoicing.model.Estimate;
 import java.util.ArrayList;
 
 import io.realm.Realm;
+import io.realm.Sort;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -98,14 +99,12 @@ public class PurchaseFragment extends Fragment
             NavigationView navigationView = (NavigationView) getActivity().findViewById(R.id.nav_view);
             navigationView.setCheckedItem(R.id.nav_purchases);
         }
-
-        App.getInstance().updateData();
     }
 
     public void updateViews() {
         try (Realm realm = Realm.getDefaultInstance()) {
             array_list.clear();
-            array_list.addAll(realm.copyFromRealm(realm.where(Estimate.class).equalTo("pendingDelete", false).findAll()));
+            array_list.addAll(realm.copyFromRealm(realm.where(Estimate.class).equalTo("pendingDelete", false).sort("Updated", Sort.DESCENDING).findAll()));
             adapter.notifyDataSetChanged();
         } catch (Exception e) {
 

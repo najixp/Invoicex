@@ -10,9 +10,10 @@ import android.view.MenuItem;
 import android.widget.EditText;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Client;
+
+import java.util.Date;
 
 import io.realm.Realm;
 import io.realm.Sort;
@@ -128,10 +129,10 @@ public class NewClientActivity extends AppCompatActivity {
                     client.State = edit_state.getText().toString().trim();
                     client.Postcode = edit_postcode.getText().toString().trim();
                     client.Country = edit_country.getText().toString().trim();
+                    client.Updated = Integer.parseInt(new Date().getTime() / 1000 + "");
                     client.pendingUpdate = true;
 
                     realm.executeTransaction(realm1 -> realm1.insertOrUpdate(client));
-                    App.getInstance().updateData();
 
                     Intent intent = new Intent(NewClientActivity.this, MainActivity.class);
                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -166,7 +167,6 @@ public class NewClientActivity extends AppCompatActivity {
                                             client.pendingDelete = true;
                                             realm1.insertOrUpdate(client);
                                         });
-                                        App.getInstance().updateData();
                                     }
 
                                     Intent intent = new Intent(NewClientActivity.this, MainActivity.class);

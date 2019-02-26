@@ -98,8 +98,6 @@ public class DescriptionFragment extends Fragment {
             NavigationView navigationView = (NavigationView) getActivity().findViewById(R.id.nav_view);
             navigationView.setCheckedItem(R.id.navDescriptions);
         }
-
-        App.getInstance().updateData();
     }
 
     public void updateViews() {

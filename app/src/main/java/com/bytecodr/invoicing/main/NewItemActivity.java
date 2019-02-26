@@ -10,11 +10,12 @@ import android.view.MenuItem;
 import android.widget.EditText;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Item;
 
 import org.json.JSONObject;
+
+import java.util.Date;
 
 import io.realm.Realm;
 import io.realm.Sort;
@@ -124,10 +125,10 @@ public class NewItemActivity extends AppCompatActivity {
 
                     }
                     item1.Description = edit_description.getText().toString().trim();
+                    item1.Updated = Integer.parseInt(new Date().getTime() / 1000 + "");
                     item1.pendingUpdate = true;
 
                     realm.executeTransaction(realm1 -> realm1.insertOrUpdate(item1));
-                    App.getInstance().updateData();
 
                     Intent intent = new Intent(NewItemActivity.this, MainActivity.class);
                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -163,7 +164,6 @@ public class NewItemActivity extends AppCompatActivity {
                                                     realm1.insertOrUpdate(item1);
                                                 }
                                         );
-                                        App.getInstance().updateData();
                                     }
 
                                     Intent intent = new Intent(NewItemActivity.this, MainActivity.class);

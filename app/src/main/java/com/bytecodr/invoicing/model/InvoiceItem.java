@@ -5,13 +5,11 @@ import com.google.gson.annotations.SerializedName;
 import java.io.Serializable;
 
 import io.realm.RealmObject;
-import io.realm.annotations.PrimaryKey;
 
 /**
  * Created by GuriSingh on 08/05/2016.
  */
 public class InvoiceItem extends RealmObject implements Serializable {
-    @PrimaryKey
     public long Id;
     public long UserId;
     public long InvoiceId;

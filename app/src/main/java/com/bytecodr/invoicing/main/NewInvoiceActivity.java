@@ -33,12 +33,12 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.BuildConfig;
 import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.helper.helper_number;
 import com.bytecodr.invoicing.model.Client;
+import com.bytecodr.invoicing.model.DoublePreference;
 import com.bytecodr.invoicing.model.Invoice;
 import com.bytecodr.invoicing.model.InvoiceItem;
 import com.bytecodr.invoicing.model.StringPreference;
@@ -232,6 +232,12 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                     edit_invoice_number.setTag(-1);
                 else
                     edit_invoice_number.setTag(invoice1.Id - 1);
+
+                Invoice invoice2 = realm.where(Invoice.class).sort("InvoiceNumber", Sort.DESCENDING).findFirst();
+                if (invoice2 == null || invoice2.InvoiceNumber > 0)
+                    edit_invoice_number.setText((invoice2.InvoiceNumber + 1) + "");
+                else
+                    edit_invoice_number.setText("1");
             }
             edit_invoice_date.setText(dateFormat.format(calendar.getTime()));
             toolbar.setTitle(getResources().getString(R.string.title_activity_new_invoice));
@@ -391,6 +397,8 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
             if (isFormValid()) {
                 if (isInvoiceFormValid()) {
                     try (Realm realm = Realm.getDefaultInstance()) {
+                        calculate_total();
+
                         Invoice invoice = new Invoice();
 
                         String Id = edit_invoice_number.getTag().toString();
@@ -411,9 +419,11 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                             invoice.TaxRate = Double.valueOf(edit_tax_rate.getText().toString().trim());
                         } catch (NumberFormatException e) {
                         }
+
                         invoice.ClientId = array_list_clients.get(spinner_client.getSelectedItemPosition()).Id;
                         invoice.ClientName = array_list_clients.get(spinner_client.getSelectedItemPosition()).Name;
                         invoice.ClientNote = edit_client_notes.getText().toString().trim();
+                        invoice.TotalMoney = total;
                         invoice.IsPaid = switch_payment_received.isChecked();
 
                         String invoiceDateString = edit_invoice_date.getText().toString().trim();
@@ -435,45 +445,41 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                             invoice.InvoiceDate = Integer.parseInt(invoiceDate.getTime() / 1000 + "");
                         if (invoiceDueDate != null)
                             invoice.InvoiceDueDate = Integer.parseInt(invoiceDueDate.getTime() / 1000 + "");
+                        invoice.Updated = Integer.parseInt(new Date().getTime() / 1000 + "");
                         invoice.pendingUpdate = true;
+
+                        Calendar calendar = Calendar.getInstance(); // this takes current date
+                        calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMinimum(Calendar.DAY_OF_MONTH));
+                        calendar.set(Calendar.HOUR_OF_DAY, calendar.getActualMinimum(Calendar.HOUR_OF_DAY));
+                        calendar.set(Calendar.MINUTE, calendar.getActualMinimum(Calendar.MINUTE));
+                        calendar.set(Calendar.SECOND, calendar.getActualMinimum(Calendar.SECOND));
+
+                        //Getting first of the last 4 months
+                        long monthStartDate = calendar.getTimeInMillis() / 1000;
+
+                        calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH));
+                        calendar.set(Calendar.HOUR_OF_DAY, calendar.getActualMaximum(Calendar.HOUR_OF_DAY));
+                        calendar.set(Calendar.MINUTE, calendar.getActualMaximum(Calendar.MINUTE));
+                        calendar.set(Calendar.SECOND, calendar.getActualMaximum(Calendar.SECOND));
+
+                        long monthEndDate = calendar.getTimeInMillis() / 1000;
 
                         realm.executeTransaction(realm1 -> {
                             realm1.insertOrUpdate(invoice);
-                            if (currentInvoice != null) {
-                                List<InvoiceItem> dbItems = realm1.where(InvoiceItem.class).equalTo("InvoiceId", invoice.Id).findAll();
-                                for (InvoiceItem dbItem : dbItems) {
-                                    boolean found = false;
-                                    for (InvoiceItem listItem : array_list_items) {
-                                        if (listItem.Id == dbItem.Id) {
-                                            realm1.insertOrUpdate(listItem);
-                                            found = true;
-                                            break;
-                                        }
-                                    }
-                                    if (!found) {
-                                        realm1.insertOrUpdate(dbItem);
-                                    }
-                                }
-                                for (InvoiceItem listItem : array_list_items) {
-                                    boolean found = false;
-                                    for (InvoiceItem dbItem : dbItems) {
-                                        if (listItem.Id == dbItem.Id) {
-                                            found = true;
-                                            break;
-                                        }
-                                    }
-                                    if (!found)
-                                        realm1.insertOrUpdate(listItem);
-                                }
-                            } else
-                                realm1.insertOrUpdate(array_list_items);
+
+                            realm1.where(InvoiceItem.class).equalTo("InvoiceId", invoice.Id).findAll().deleteAllFromRealm();
+                            realm1.insertOrUpdate(array_list_items);
+
+                            realm1.insertOrUpdate(new DoublePreference("unpaidTotal",
+                                    realm1.where(Invoice.class).equalTo("IsPaid", false).
+                                            greaterThanOrEqualTo("InvoiceDate", monthStartDate).
+                                            lessThanOrEqualTo("InvoiceDate", monthEndDate).
+                                            sum("TotalMoney").doubleValue()));
                         });
 
-                        App.getInstance().updateData();
-
-                        Intent intent = new Intent(NewInvoiceActivity.this, MainActivity.class);
+                        Intent intent = new Intent(NewInvoiceActivity.this, NewInvoiceActivity.class);
                         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        intent.putExtra("tab", "invoices");
+                        intent.putExtra("data", invoice);
                         startActivity(intent);
                         finish();
                     }
@@ -506,7 +512,6 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
                                             invoice.pendingDelete = true;
                                             realm1.insertOrUpdate(invoice);
                                         });
-                                        App.getInstance().updateData();
                                     }
 
                                     Intent intent = new Intent(NewInvoiceActivity.this, MainActivity.class);
@@ -671,6 +676,8 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         return isValid;
     }
 
+    double total = 0f;
+
     public void calculate_total() {
         double subtotal = 0;
 
@@ -690,10 +697,11 @@ public class NewInvoiceActivity extends AppCompatActivity implements DatePickerD
         }
 
         double tax = (tax_rate * subtotal) / 100;
+        total = subtotal + tax;
 
         text_subtotal_amount.setText(currency + helper_number.round(subtotal));
         text_tax_amount.setText(currency + helper_number.round(tax));
-        text_total_amount.setText(currency + helper_number.round(subtotal + tax));
+        text_total_amount.setText(currency + helper_number.round(total));
     }
 
     public static void setListViewHeightBasedOnChildren(ListView listView) {

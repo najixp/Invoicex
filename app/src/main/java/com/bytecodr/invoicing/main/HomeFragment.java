@@ -64,15 +64,12 @@ public class HomeFragment extends Fragment {
 
         //text_paid = (TextView) view.findViewById(R.id.text_paid);
         text_unpaid = (TextView) view.findViewById(R.id.text_unpaid);
-        view.findViewById(R.id.syncButton).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (CommonUtilities.isOnline(getContext())) {
-                    App.getInstance().updateData();
-                    Toast.makeText(getContext(), R.string.updating_data, Toast.LENGTH_LONG).show();
-                } else
-                    Toast.makeText(getContext(), R.string.no_connection, Toast.LENGTH_LONG).show();
-            }
+        view.findViewById(R.id.syncButton).setOnClickListener(view1 -> {
+            if (CommonUtilities.isOnline(getContext())) {
+                App.getInstance().updateData();
+                Toast.makeText(getContext(), R.string.updating_data, Toast.LENGTH_LONG).show();
+            } else
+                Toast.makeText(getContext(), R.string.no_connection, Toast.LENGTH_LONG).show();
         });
 
 //        chart = (BarChart) view.findViewById(R.id.chart);
@@ -100,8 +97,6 @@ public class HomeFragment extends Fragment {
             NavigationView navigationView = (NavigationView) getActivity().findViewById(R.id.nav_view);
             navigationView.setCheckedItem(R.id.nav_home);
         }
-
-        App.getInstance().updateData();
     }
 
     public void updateViews() {

@@ -32,7 +32,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.BuildConfig;
 import com.bytecodr.invoicing.CommonUtilities;
 import com.bytecodr.invoicing.R;
@@ -214,6 +213,12 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                     edit_purchase_number.setTag(-1);
                 else
                     edit_purchase_number.setTag(estimate1.Id - 1);
+
+                Estimate estimate2 = realm.where(Estimate.class).sort("EstimateNumber", Sort.DESCENDING).findFirst();
+                if (estimate2 == null || estimate2.EstimateNumber > 0)
+                    edit_purchase_number.setText((estimate2.EstimateNumber + 1) + "");
+                else
+                    edit_purchase_number.setText("1");
             }
             edit_purchase_date.setText(dateFormat.format(calendar.getTime()));
             toolbar.setTitle(getResources().getString(R.string.title_activity_new_purchase));
@@ -377,6 +382,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
             if (isFormValid()) {
                 if (isEstimateFormValid()) {
                     try (Realm realm = Realm.getDefaultInstance()) {
+                        calculate_total();
                         Estimate estimate = new Estimate();
 
                         estimate.Id = Long.valueOf(edit_purchase_number.getTag().toString());
@@ -389,9 +395,11 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                             estimate.TaxRate = Double.valueOf(edit_tax_rate.getText().toString().trim());
                         } catch (NumberFormatException e) {
                         }
+
                         estimate.ClientId = array_list_clients.get(spinner_client.getSelectedItemPosition()).Id;
                         estimate.ClientName = array_list_clients.get(spinner_client.getSelectedItemPosition()).Name;
                         estimate.ClientNote = edit_client_notes.getText().toString().trim();
+                        estimate.TotalMoney = total;
 
                         String estimateDateString = edit_purchase_date.getText().toString().trim();
                         String estimateDueDateString = edit_purchase_due_date.getText().toString().trim();
@@ -408,45 +416,18 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                             estimate.EstimateDate = Integer.parseInt(estimateDate.getTime() / 1000 + "");
                         if (estimateDueDate != null)
                             estimate.EstimateDueDate = Integer.parseInt(estimateDueDate.getTime() / 1000 + "");
+                        estimate.Updated = Integer.parseInt(new Date().getTime() / 1000 + "");
                         estimate.pendingUpdate = true;
 
                         realm.executeTransaction(realm1 -> {
                             realm1.insertOrUpdate(estimate);
-                            if (currentEstimate != null) {
-                                List<EstimateItem> dbItems = realm1.where(EstimateItem.class).equalTo("EstimateId", currentEstimate.Id).findAll();
-                                for (EstimateItem dbItem : dbItems) {
-                                    boolean found = false;
-                                    for (EstimateItem listItem : array_list_items) {
-                                        if (listItem.Id == dbItem.Id) {
-                                            realm1.insertOrUpdate(listItem);
-                                            found = true;
-                                            break;
-                                        }
-                                    }
-                                    if (!found) {
-                                        realm1.insertOrUpdate(dbItem);
-                                    }
-                                }
-                                for (EstimateItem listItem : array_list_items) {
-                                    boolean found = false;
-                                    for (EstimateItem dbItem : dbItems) {
-                                        if (listItem.Id == dbItem.Id) {
-                                            found = true;
-                                            break;
-                                        }
-                                    }
-                                    if (!found)
-                                        realm1.insertOrUpdate(listItem);
-                                }
-                            } else
-                                realm1.insertOrUpdate(array_list_items);
+                            realm1.where(EstimateItem.class).equalTo("EstimateId", estimate.Id).findAll().deleteAllFromRealm();
+                            realm1.insertOrUpdate(array_list_items);
                         });
 
-                        App.getInstance().updateData();
-
-                        Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
+                        Intent intent = new Intent(NewPurchaseActivity.this, NewPurchaseActivity.class);
                         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        intent.putExtra("tab", "purchases");
+                        intent.putExtra("data", estimate);
                         startActivity(intent);
                         finish();
                     }
@@ -479,7 +460,6 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
                                             estimate.pendingDelete = true;
                                             realm1.insertOrUpdate(estimate);
                                         });
-                                        App.getInstance().updateData();
                                     }
 
                                     Intent intent = new Intent(NewPurchaseActivity.this, MainActivity.class);
@@ -623,6 +603,7 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         return isValid;
     }
 
+    double total = 0;
     public void calculate_total() {
         double subtotal = 0;
 
@@ -642,10 +623,11 @@ public class NewPurchaseActivity extends AppCompatActivity implements DatePicker
         }
 
         double tax = (tax_rate * subtotal) / 100;
+        total = subtotal + tax;
 
         text_subtotal_amount.setText(currency + helper_number.round(subtotal));
         text_tax_amount.setText(currency + helper_number.round(tax));
-        text_total_amount.setText(currency + helper_number.round(subtotal + tax));
+        text_total_amount.setText(currency + helper_number.round(total));
     }
 
     public static void setListViewHeightBasedOnChildren(ListView listView) {

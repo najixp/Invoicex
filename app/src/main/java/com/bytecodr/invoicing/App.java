@@ -190,6 +190,83 @@ public class App extends Application {
         });
 
         addToRequestQueue(new JsonObjectRequest
+                (Request.Method.POST, Network.API_URL + "items/get", api_parameter, response -> {
+                    try {
+                        JSONObject result = ((JSONObject) response.get("data"));
+                        JSONArray items = (JSONArray) result.get("items");
+
+                        try (Realm realm = Realm.getDefaultInstance()) {
+                            realm.executeTransaction(realm1 -> realm1.where(Item.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
+
+                            for (int i = 0; i < items.length(); i++) {
+                                JSONObject obj = items.getJSONObject(i);
+
+                                Item item = new Item();
+
+                                item.Id = obj.optInt("id");
+
+                                if (realm.where(Item.class).equalTo("Id", item.Id).count() > 0)
+                                    continue;
+
+                                item.UserId = obj.optInt("user_id");
+
+                                item.Name = helper_string.optString(obj, "name");
+                                item.Description = helper_string.optString(obj, "description");
+                                item.Rate = obj.optDouble("rate");
+
+                                item.Created = obj.optInt("created_on", 0);
+                                item.Updated = obj.optInt("updated_on", 0);
+
+                                realm.executeTransaction(realm12 -> realm12.insertOrUpdate(item));
+                            }
+                        }
+                        notifyOnUpdateListeners();
+                    } catch (Exception ex) {
+                    }
+
+                }, error -> {
+                }) {
+
+            @Override
+            public Map<String, String> getHeaders() {
+                Map<String, String> params = new HashMap<>();
+                params.put("X-API-KEY", MainActivity.api_key);
+                return params;
+            }
+        });
+
+        App.getInstance().api.getDescriptions(SERVER_KEY_HASH, userId).enqueue(new Callback<JsonObject>() {
+            @Override
+            public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
+                if (response.isSuccessful()) {
+                    JsonObject responseJo = response.body();
+                    String status = responseJo.get("status").getAsString();
+                    if (status.equals("true")) {
+                        JsonElement dataJe = responseJo.get("desc_data");
+                        Type type = new TypeToken<List<Description>>() {
+                        }.getType();
+                        List<Description> descriptions = new Gson().fromJson(dataJe, type);
+                        try (Realm realm = Realm.getDefaultInstance()) {
+                            realm.executeTransaction(realm1 -> {
+                                realm1.where(Description.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm();
+
+                                for (Description description : descriptions)
+                                    if (realm1.where(Description.class).equalTo("id", description.id).count() == 0)
+                                        realm1.insertOrUpdate(description);
+                            });
+                        }
+                    }
+                    notifyOnUpdateListeners();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<JsonObject> call, Throwable t) {
+
+            }
+        });
+
+        addToRequestQueue(new JsonObjectRequest
                 (Request.Method.POST, Network.API_URL + "estimates/get", api_parameter, response -> {
                     try {
                         JSONObject result = ((JSONObject) response.get("data"));
@@ -351,83 +428,6 @@ public class App extends Application {
                 Map<String, String> params = new HashMap<>();
                 params.put("X-API-KEY", MainActivity.api_key);
                 return params;
-            }
-        });
-
-        addToRequestQueue(new JsonObjectRequest
-                (Request.Method.POST, Network.API_URL + "items/get", api_parameter, response -> {
-                    try {
-                        JSONObject result = ((JSONObject) response.get("data"));
-                        JSONArray items = (JSONArray) result.get("items");
-
-                        try (Realm realm = Realm.getDefaultInstance()) {
-                            realm.executeTransaction(realm1 -> realm1.where(Item.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm());
-
-                            for (int i = 0; i < items.length(); i++) {
-                                JSONObject obj = items.getJSONObject(i);
-
-                                Item item = new Item();
-
-                                item.Id = obj.optInt("id");
-
-                                if (realm.where(Item.class).equalTo("Id", item.Id).count() > 0)
-                                    continue;
-
-                                item.UserId = obj.optInt("user_id");
-
-                                item.Name = helper_string.optString(obj, "name");
-                                item.Description = helper_string.optString(obj, "description");
-                                item.Rate = obj.optDouble("rate");
-
-                                item.Created = obj.optInt("created_on", 0);
-                                item.Updated = obj.optInt("updated_on", 0);
-
-                                realm.executeTransaction(realm12 -> realm12.insertOrUpdate(item));
-                            }
-                        }
-                        notifyOnUpdateListeners();
-                    } catch (Exception ex) {
-                    }
-
-                }, error -> {
-                }) {
-
-            @Override
-            public Map<String, String> getHeaders() {
-                Map<String, String> params = new HashMap<>();
-                params.put("X-API-KEY", MainActivity.api_key);
-                return params;
-            }
-        });
-
-        App.getInstance().api.getDescriptions(SERVER_KEY_HASH, userId).enqueue(new Callback<JsonObject>() {
-            @Override
-            public void onResponse(Call<JsonObject> call, retrofit2.Response<JsonObject> response) {
-                if (response.isSuccessful()) {
-                    JsonObject responseJo = response.body();
-                    String status = responseJo.get("status").getAsString();
-                    if (status.equals("true")) {
-                        JsonElement dataJe = responseJo.get("desc_data");
-                        Type type = new TypeToken<List<Description>>() {
-                        }.getType();
-                        List<Description> descriptions = new Gson().fromJson(dataJe, type);
-                        try (Realm realm = Realm.getDefaultInstance()) {
-                            realm.executeTransaction(realm1 -> {
-                                realm1.where(Description.class).equalTo("pendingUpdate", false).equalTo("pendingDelete", false).findAll().deleteAllFromRealm();
-
-                                for (Description description : descriptions)
-                                    if (realm1.where(Description.class).equalTo("id", description.id).count() == 0)
-                                        realm1.insertOrUpdate(description);
-                            });
-                        }
-                    }
-                    notifyOnUpdateListeners();
-                }
-            }
-
-            @Override
-            public void onFailure(Call<JsonObject> call, Throwable t) {
-
             }
         });
 

@@ -22,6 +22,7 @@ import com.google.android.gms.ads.InterstitialAd;
 import java.util.ArrayList;
 
 import io.realm.Realm;
+import io.realm.Sort;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -116,14 +117,12 @@ public class InvoiceFragment extends Fragment {
             NavigationView navigationView = (NavigationView) getActivity().findViewById(R.id.nav_view);
             navigationView.setCheckedItem(R.id.nav_invoices);
         }
-
-        App.getInstance().updateData();
     }
 
     public void updateViews() {
         try (Realm realm = Realm.getDefaultInstance()) {
             array_list.clear();
-            array_list.addAll(realm.copyFromRealm(realm.where(Invoice.class).equalTo("pendingDelete", false).findAll()));
+            array_list.addAll(realm.copyFromRealm(realm.where(Invoice.class).equalTo("pendingDelete", false).sort("Updated", Sort.DESCENDING).findAll()));
             adapter.notifyDataSetChanged();
         } catch (Exception e) {
 

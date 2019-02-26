@@ -17,13 +17,15 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.afollestad.materialdialogs.MaterialDialog;
 import com.bytecodr.invoicing.BuildConfig;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.helper.helper_number;
 import com.bytecodr.invoicing.main.LoginActivity;
 import com.bytecodr.invoicing.main.SettingActivity;
-import com.bytecodr.invoicing.network.ErrorResponse;
+import com.bytecodr.invoicing.model.Estimate;
+import com.bytecodr.invoicing.model.EstimateItem;
+import com.bytecodr.invoicing.model.Invoice;
+import com.bytecodr.invoicing.model.InvoiceItem;
 import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
@@ -37,15 +39,20 @@ import com.itextpdf.text.pdf.ColumnText;
 import com.itextpdf.text.pdf.PdfContentByte;
 import com.itextpdf.text.pdf.PdfWriter;
 import com.itextpdf.text.pdf.draw.LineSeparator;
+import com.wdullaer.materialdatetimepicker.date.DatePickerDialog;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+
+import io.realm.Realm;
+import io.realm.Sort;
 
 import static android.content.Context.MODE_PRIVATE;
 import static com.bytecodr.invoicing.main.LoginActivity.SESSION_USER;
@@ -53,7 +60,7 @@ import static com.itextpdf.text.pdf.ColumnText.AR_LIG;
 
 public class ReportsFragment
         extends Fragment
-        implements ReportsFragmentModelListener, View.OnClickListener {
+        implements View.OnClickListener, DatePickerDialog.OnDateSetListener {
 
     private static SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
     private static SimpleDateFormat dateFormat1 = new SimpleDateFormat("dd_MM_yyyy", Locale.getDefault());
@@ -82,10 +89,6 @@ public class ReportsFragment
     private List<Item> mInvoice;
     private List<Item> mPurchase;
 
-    private ReportsFragmentModel mModel;
-
-    MaterialDialog progressDialog;
-
     private TextView tvInvoiceSum;
     private TextView tvPurchaseSum;
     private TextView tvDifference;
@@ -94,7 +97,12 @@ public class ReportsFragment
     private ViewPager vp;
     private TabLayout tl;
 
-    public ReportsFragment() {}
+    private DatePickerDialog datePicker;
+
+    Calendar calendar = Calendar.getInstance();
+
+    public ReportsFragment() {
+    }
 
     public static ReportsFragment newInstance() {
         ReportsFragment fragment = new ReportsFragment();
@@ -111,7 +119,6 @@ public class ReportsFragment
 
         mInvoice = new ArrayList<>();
         mPurchase = new ArrayList<>();
-        mModel = new ReportsFragmentModel(this);
     }
 
     @Override
@@ -125,21 +132,6 @@ public class ReportsFragment
     public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        initViews();
-        createProgressDialog();
-        loadData();
-    }
-
-    private void createProgressDialog() {
-        progressDialog = new MaterialDialog.Builder(getContext())
-                .title(R.string.progress_dialog)
-                .content(R.string.please_wait)
-                .cancelable(false)
-                .progress(true, 0).build();
-    }
-
-    private void initViews() {
-        View view = getView();
         tvInvoiceSum = (TextView) view.findViewById(R.id.tvInvoiceSum);
         tvPurchaseSum = (TextView) view.findViewById(R.id.tvPurchaseSum);
         tvDifference = (TextView) view.findViewById(R.id.tvDifference);
@@ -148,62 +140,93 @@ public class ReportsFragment
         btnDownloadPdf.setOnClickListener(this);
         vp = (ViewPager) view.findViewById(R.id.vp);
         tl = (TabLayout) view.findViewById(R.id.tl);
+        view.findViewById(R.id.datePicker).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (!datePicker.isAdded())
+                    datePicker.show(getActivity().getFragmentManager(), "invoice_date");
+            }
+        });
+
+        datePicker = DatePickerDialog.newInstance(
+                ReportsFragment.this,
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+        );
+
+        updateData();
     }
-
-    private void loadData() {
-        showDialog();
-
-        SharedPreferences settings = getActivity().getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
-        int userId = settings.getInt("id", -1);
-        if (userId!=-1) {
-            mModel.getReport(userId);
-        }
-        tvDate.setText(dateFormat.format(new Date()));
-    }
-
-
-
-    /* BEG MODEL CALLBACKS */
 
     @Override
-    public void onGetReportSuccess(double invoiceSum, double purchaseSum, double difference, List
-                <Item> invoices, List<Item> purchases) {
-        mInvoice = invoices;
-        mPurchase = purchases;
+    public void onDateSet(DatePickerDialog view, int year, int monthOfYear, int dayOfMonth) {
+        calendar.set(Calendar.YEAR, year);
+        calendar.set(Calendar.MONTH, monthOfYear);
+        calendar.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+        updateData();
+    }
+
+    public void updateData() {
+        calendar.set(Calendar.HOUR_OF_DAY, calendar.getActualMinimum(Calendar.HOUR_OF_DAY));
+        calendar.set(Calendar.MINUTE, calendar.getActualMinimum(Calendar.MINUTE));
+        calendar.set(Calendar.SECOND, calendar.getActualMinimum(Calendar.SECOND));
+
+        //Getting first of the last 4 months
+        long dayStartDate = calendar.getTimeInMillis() / 1000;
+
+        calendar.set(Calendar.HOUR_OF_DAY, calendar.getActualMaximum(Calendar.HOUR_OF_DAY));
+        calendar.set(Calendar.MINUTE, calendar.getActualMaximum(Calendar.MINUTE));
+        calendar.set(Calendar.SECOND, calendar.getActualMaximum(Calendar.SECOND));
+
+        long dayEndDate = calendar.getTimeInMillis() / 1000;
+
+        double invoiceSum = 0;
+        double purchaseSum = 0;
+
+        mInvoice.clear();
+        mPurchase.clear();
+
+        try (Realm realm = Realm.getDefaultInstance()) {
+            List<Invoice> invoices = realm.where(Invoice.class).greaterThanOrEqualTo("Created", dayStartDate).lessThanOrEqualTo("Created", dayEndDate).sort("Updated", Sort.DESCENDING).findAll();
+            for (Invoice invoice : invoices) {
+                double amount = 0;
+                for (InvoiceItem invoiceItem : realm.where(InvoiceItem.class).equalTo("InvoiceId", invoice.Id).findAll())
+                    amount += invoiceItem.Rate * invoiceItem.Quantity;
+                if (amount == 0)
+                    continue;
+                mInvoice.add(new Item(invoice.InvoiceNumber + "", amount, amount * invoice.TaxRate / 100, amount * (1 + invoice.TaxRate / 100)));
+                invoiceSum += amount;
+            }
+            List<Estimate> estimates = realm.where(Estimate.class).greaterThanOrEqualTo("Created", dayStartDate).lessThanOrEqualTo("Created", dayEndDate).sort("Updated", Sort.DESCENDING).findAll();
+            for (Estimate estimate : estimates) {
+                double amount = 0;
+                for (EstimateItem estimateItem : realm.where(EstimateItem.class).equalTo("EstimateId", estimate.Id).findAll())
+                    amount += estimateItem.Rate * estimateItem.Quantity;
+                if (amount == 0)
+                    continue;
+                mPurchase.add(new Item(estimate.EstimateNumber + "", amount, amount * estimate.TaxRate / 100, amount * (1 + estimate.TaxRate / 100)));
+                purchaseSum += amount;
+            }
+        }
 
         Activity activity = getActivity();
         SharedPreferences settings = activity.getSharedPreferences(LoginActivity.SESSION_USER, MODE_PRIVATE);
         String currencySymbol = settings.getString(SettingActivity.KEY_CURRENCY_SYMBOL, "$");
         tvInvoiceSum.setText(currencySymbol + " " + String.valueOf(invoiceSum));
         tvPurchaseSum.setText(currencySymbol + " " + String.valueOf(purchaseSum));
-        tvDifference.setText(currencySymbol + " " + String.valueOf(difference));
+        tvDifference.setText(currencySymbol + " " + String.valueOf(Math.abs(invoiceSum - purchaseSum)));
 
-        PagerAdapter adapter = new PagerAdapter(getChildFragmentManager(), invoices, purchases);
+        PagerAdapter adapter = new PagerAdapter(getChildFragmentManager(), mInvoice, mPurchase);
         vp.setAdapter(adapter);
         tl.setupWithViewPager(vp);
-
-        hideDialog();
+        tvDate.setText(dateFormat.format(new Date(calendar.getTimeInMillis())));
     }
 
-    @Override
-    public void onGetReportFailure(ErrorResponse response) {
-        Toast.makeText(getContext(), "Failed to load data", Toast.LENGTH_SHORT).show();
-        hideDialog();
-    }
-
-    private void showDialog() {
-        if (progressDialog!=null && !progressDialog.isShowing())
-            progressDialog.show();
-    }
-
-    private void hideDialog() {
-        if (progressDialog!=null && progressDialog.isShowing())
-            progressDialog.hide();
-    }
+    /* BEG MODEL CALLBACKS */
 
     @Override
     public void onClick(View view) {
-        if (view.getId() == R.id.btnDownloadPdf){
+        if (view.getId() == R.id.btnDownloadPdf) {
             currentReportTitle = "Report_" + dateFormat1.format(new Date());
             String path = downloadPDF();
 
@@ -379,7 +402,7 @@ public class ReportsFragment
             cb.rectangle(rec);
 
             // Invoice Detail box Text Headings
-            createText(cb, 40, line_heading_start, getResources().getString(R.string.invoice) +"#", SIZE_TEXT_HEADER_TABLE, bf, BaseColor
+            createText(cb, 40, line_heading_start, getResources().getString(R.string.invoice) + "#", SIZE_TEXT_HEADER_TABLE, bf, BaseColor
                     .WHITE, Element.ALIGN_LEFT);
             createText(cb, 360, line_heading_start, getResources().getString(R.string.amount),
                     SIZE_TEXT_HEADER_TABLE, bf, BaseColor.WHITE, Element.ALIGN_LEFT);
@@ -401,7 +424,7 @@ public class ReportsFragment
             cb.rectangle(rec);
 
             // Invoice Detail box Text Headings
-            createText(cb, 40, line_heading_start, getResources().getString(R.string.purchase) +"#", SIZE_TEXT_HEADER_TABLE, bf, BaseColor
+            createText(cb, 40, line_heading_start, getResources().getString(R.string.purchase) + "#", SIZE_TEXT_HEADER_TABLE, bf, BaseColor
                     .WHITE, Element.ALIGN_LEFT);
             createText(cb, 360, line_heading_start, getResources().getString(R.string.amount),
                     SIZE_TEXT_HEADER_TABLE, bf, BaseColor.WHITE, Element.ALIGN_LEFT);
@@ -426,7 +449,6 @@ public class ReportsFragment
             createText(cb, address_startX, address1_start, settings.getString("firstname", "") +
                             " " + settings.getString("lastname", ""), SIZE_TEXT_HEADER_PAGE, bf,
                     BaseColor.BLACK, Element.ALIGN_LEFT);
-
 
 
             createText(cb, 350, address1_start, getResources().getString(R.string
@@ -518,7 +540,7 @@ public class ReportsFragment
         fnt.setColor(color);
         Phrase phrase = new Phrase(text, fnt);
 
-        ColumnText.showTextAligned(cb, alignment, phrase, x, y, 0, PdfWriter.RUN_DIRECTION_RTL,AR_LIG);
+        ColumnText.showTextAligned(cb, alignment, phrase, x, y, 0, PdfWriter.RUN_DIRECTION_RTL, AR_LIG);
 
     }
 
@@ -537,8 +559,8 @@ public class ReportsFragment
     private void initializeFonts() {
         try {
 
-            bfBold = BaseFont.createFont("res/font/tradbdo.ttf", BaseFont.IDENTITY_H,BaseFont.EMBEDDED);
-            bf = BaseFont.createFont("res/font/trado.ttf", BaseFont.IDENTITY_H,BaseFont.EMBEDDED);
+            bfBold = BaseFont.createFont("res/font/tradbdo.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+            bf = BaseFont.createFont("res/font/trado.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
 
         } catch (DocumentException ex) {
             //ex.printStackTrace();

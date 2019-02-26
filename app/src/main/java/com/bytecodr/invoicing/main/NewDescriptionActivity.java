@@ -10,7 +10,6 @@ import android.view.MenuItem;
 import android.widget.EditText;
 
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.bytecodr.invoicing.App;
 import com.bytecodr.invoicing.R;
 import com.bytecodr.invoicing.model.Description;
 
@@ -117,7 +116,6 @@ public class NewDescriptionActivity extends AppCompatActivity {
                                 description1.pendingUpdate = true;
                                 realm1.insertOrUpdate(description1);
                             });
-                            App.getInstance().updateData();
                         }
                     }
                 }
@@ -149,7 +147,6 @@ public class NewDescriptionActivity extends AppCompatActivity {
                                         description1.pendingDelete = true;
                                         realm1.insertOrUpdate(description1);
                                     });
-                                    App.getInstance().updateData();
                                 }
 
                                 Intent intent = new Intent(NewDescriptionActivity.this, MainActivity.class);

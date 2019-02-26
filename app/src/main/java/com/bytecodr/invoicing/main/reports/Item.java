@@ -16,6 +16,13 @@ class Item implements Parcelable {
     @SerializedName("total")
     Double total;
 
+    public Item(String id, Double amount, Double vat, Double total) {
+        this.id = id;
+        this.amount = amount;
+        this.vat = vat;
+        this.total = total;
+    }
+
     protected Item(Parcel in) {
         id = in.readString();
         if (in.readByte() == 0) {
